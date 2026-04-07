@@ -5,8 +5,6 @@
 [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![Ollama](https://img.shields.io/badge/Ollama-000000?logo=ollama&logoColor=white)](https://ollama.ai/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Built with Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-DA7857?logo=anthropic)](https://claude.ai/code)
-
 ## Overview
 
 **RunPod Launcher** is a command-line tool that simplifies spinning up GPU pods on RunPod to serve large language models (LLMs) using Ollama. No more manual pod creation, model downloads, or complex configurations—just a single command to deploy a fully functional inference server.
@@ -238,15 +236,6 @@ Any model from [Ollama Library](https://ollama.com/library):
 - **Neural Chat**: `neural-chat`
 - **Dolphin**: `dolphin-mixtral`
 - And 100+ more...
-
-## Development Journey
-
-This project evolved from vLLM to Ollama for better simplicity and reliability. See [docs/JOURNEY.md](docs/JOURNEY.md) for:
-
-- Detailed problem-solving process
-- Key learnings and pivots
-- Why we chose Ollama over vLLM
-- Troubleshooting tips
 
 ## Testing
 
