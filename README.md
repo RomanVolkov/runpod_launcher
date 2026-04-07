@@ -200,11 +200,17 @@ runpod-launcher/
 ## Key Features
 
 ✅ **One-Command Deployment** — Single command to spin up fully functional LLM server
+
 ✅ **Auto-Generated API Keys** — Secure, random keys created automatically
+
 ✅ **Ollama Integration** — Support for 100+ models (Gemma, Qwen, Mistral, Llama, etc.). Or use a different inference like llama, vLLM, etc.
+
 ✅ **OpenAI-Compatible API** — Drop-in replacement for OpenAI client
+
 ✅ **Flexible Configuration** — TOML-based config with CLI flag overrides
+
 ✅ **OpenCode Integration** — Auto-update OpenCode config
+
 ✅ **Status Monitoring** — Check pod and model status from CLI
 
 ## Supported Models
