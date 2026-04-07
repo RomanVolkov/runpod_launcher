@@ -23,7 +23,7 @@ Built in Go with the Cobra CLI framework, this tool automates the entire workflo
 
 - Go 1.21 or later
 - RunPod account with API key
-- A RunPod API key ([get yours here](https://www.runpod.io/console/api-keys))
+- A RunPod API key ([get yours here](https://console.runpod.io/user/settings))
 
 ### Installation
 
@@ -45,7 +45,7 @@ go install ./cmd/runpod-launcher/
 # Initialize configuration
 runpod-launcher init
 
-# Start a pod with Gemma 4 model
+# Start a pod with defined in config model
 runpod-launcher up
 
 # Check model status
@@ -54,7 +54,7 @@ runpod-launcher model-status
 # Stop the pod
 runpod-launcher down
 
-# Query the running model
+# Query the running model (e.g., using gemma4)
 curl https://<pod-id>-8000.proxy.runpod.net/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
@@ -181,21 +181,6 @@ curl -X POST https://<pod-id>-8000.proxy.runpod.net/v1/chat/completions \
   }'
 ```
 
-### Python Client
-
-```python
-import requests
-
-url = "https://<pod-id>-8000.proxy.runpod.net/v1/chat/completions"
-data = {
-    "model": "gemma4:latest",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "stream": False
-}
-
-response = requests.post(url, json=data)
-print(response.json()['choices'][0]['message']['content'])
-```
 
 ## Project Structure
 
@@ -209,9 +194,6 @@ runpod-launcher/
 │   ├── startup/                   # Container startup scripts
 │   ├── opencode/                  # OpenCode integration
 │   └── util/                      # Helper functions
-├── docs/
-│   ├── JOURNEY.md                 # Development journey & learnings
-│   └── plans/                     # Implementation plans
 └── README.md
 ```
 
@@ -219,7 +201,7 @@ runpod-launcher/
 
 ✅ **One-Command Deployment** — Single command to spin up fully functional LLM server
 ✅ **Auto-Generated API Keys** — Secure, random keys created automatically
-✅ **Ollama Integration** — Support for 100+ models (Gemma, Qwen, Mistral, Llama, etc.)
+✅ **Ollama Integration** — Support for 100+ models (Gemma, Qwen, Mistral, Llama, etc.). Or use a different inference like llama, vLLM, etc.
 ✅ **OpenAI-Compatible API** — Drop-in replacement for OpenAI client
 ✅ **Flexible Configuration** — TOML-based config with CLI flag overrides
 ✅ **OpenCode Integration** — Auto-update OpenCode config
@@ -227,7 +209,7 @@ runpod-launcher/
 
 ## Supported Models
 
-Any model from [Ollama Library](https://ollama.com/library):
+E.g., any model from [Ollama Library](https://ollama.com/library):
 
 - **Gemma**: `gemma`, `gemma:4`
 - **Mistral**: `mistral`, `mistral-openorca`
