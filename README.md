@@ -15,7 +15,7 @@ Built in Go with the Cobra CLI framework, this tool automates the entire workflo
 - ML engineers who want quick LLM serving without DevOps complexity
 - Researchers testing different models on different hardware
 - Development teams needing temporary inference endpoints
-- Anyone who values simplicity over feature bloat
+- Anyone who values privacy over SaaS AI agents
 
 ## Quick Start
 
