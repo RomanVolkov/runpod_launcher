@@ -1,0 +1,17 @@
+# Compiled binaries
+*.exe
+*.test
+*.out
+/dist/
+/runpod-launcher
+
+# Environment and secrets
+.env
+*.env
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/

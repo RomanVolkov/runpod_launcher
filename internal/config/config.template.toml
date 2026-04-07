@@ -1,0 +1,61 @@
+# runpod-launcher configuration
+# Recommended: chmod 600 ~/.config/runpod-launcher/config.toml
+
+# RunPod API key (from runpod.io/console/user/settings → API Keys)
+runpod_api_key = ""
+
+# GPU type ID — verify from RunPod GPU list (e.g. "AMPERE_16", "ADA_LOVELACE_24")
+gpu_type_id = "AMPERE_16"
+
+# Minimum CUDA version required (e.g. "12.1", "12.9")
+# RunPod will allocate a GPU with this CUDA version or newer
+# Leave empty to accept any CUDA version
+cuda_version = ""
+
+# RunPod region (optional; e.g. "APAC", "EU", "US-EAST", "EU-NL")
+# Leave empty to use RunPod's default region selection
+region = ""
+
+# Docker image for the pod
+# Examples: "ollama/ollama:latest" or "vllm/vllm-openai:latest"
+image_name = "ollama/ollama:latest"
+
+# LLM model to serve (required)
+# For Ollama: use format "modelname:tag" (e.g., "gemma:4", "mistral:latest")
+# For vLLM: use full model ID (e.g., "google/gemma-4-31b-it", "qwen/qwen3.5-9b")
+model_name = ""
+
+# Container disk size in GB
+container_disk_gb = 50
+
+# Path inside the container where a volume is mounted
+volume_mount_path = "/workspace"
+
+# Maximum model context length in tokens (limits KV cache usage)
+# Set this if the model's default context is too large for available GPU memory
+# For example, Gemma 4 has a 262K context by default; set to 4096 or 8192 for smaller GPUs
+# Leave at 0 to use the model's default
+max_model_len = 0
+
+# Tool call parser for auto tool choice
+# Enable automatic tool calling for models that support it
+# For Qwen 3.x models: "qwen3_xml" or "qwen3_coder"
+# For other models: "mistral", "internlm", "glm", "llama4_json", etc.
+# Leave empty to disable tool calling
+# See vLLM docs for full list of supported parsers
+tool_call_parser = "qwen3_xml"
+
+# Name used to identify the pod in RunPod
+pod_name = "llm-launcher"
+
+# Last generated vLLM API key (auto-populated after 'up' command)
+# Used by 'model-status' and other commands to authenticate with the vLLM server
+last_llm_api_key = ""
+
+# Optional: path to OpenCode config JSON file for auto-update (e.g. ~/.config/opencode/config.json)
+# Leave empty to skip auto-update
+opencode_config_path = ""
+
+# Optional extra environment variables to inject into the pod
+# [env_vars]
+# MY_VAR = "value"
