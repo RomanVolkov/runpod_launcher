@@ -26,6 +26,7 @@ Usage:
   runpod-launcher down          - terminate pod and stop billing
   runpod-launcher status        - check pod status
   runpod-launcher model-status  - check if a model is loaded and ready
+  runpod-launcher availability  - list available GPU types with pricing
   runpod-launcher init          - create default config file`,
 }
 
@@ -42,5 +43,6 @@ func init() {
 	rootCmd.AddCommand(downCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(modelStatusCmd)
+	rootCmd.AddCommand(availabilityCmd)
 	rootCmd.AddCommand(initCmd)
 }

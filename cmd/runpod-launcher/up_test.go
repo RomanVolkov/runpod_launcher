@@ -39,10 +39,11 @@ func writeTestConfig(t *testing.T, content string) string {
 
 // mockClient implements pod.PodClient for testing.
 type mockClient struct {
-	createFn     func(*config.Config, string) (string, error)
-	getStatusFn  func(string) (*pod.PodStatus, error)
-	terminateFn  func(string) error
-	findByNameFn func(string) (string, error)
+	createFn      func(*config.Config, string) (string, error)
+	getStatusFn   func(string) (*pod.PodStatus, error)
+	terminateFn   func(string) error
+	findByNameFn  func(string) (string, error)
+	getGPUTypesFn func() ([]pod.GPUType, error)
 }
 
 func (m *mockClient) CreatePod(cfg *config.Config, llmAPIKey string) (string, error) {
@@ -71,6 +72,13 @@ func (m *mockClient) FindPodByName(name string) (string, error) {
 		return m.findByNameFn(name)
 	}
 	return "", errors.New("findByNameFn not set")
+}
+
+func (m *mockClient) GetGPUTypes() ([]pod.GPUType, error) {
+	if m.getGPUTypesFn != nil {
+		return m.getGPUTypesFn()
+	}
+	return nil, errors.New("getGPUTypesFn not set")
 }
 
 // executeUpDirect calls runUp directly, setting package-level flags before the call.
@@ -321,7 +329,7 @@ opencode_config_path = "/tmp/config-from-file.json"
 	// Track which path the updater was called with
 	var updateCalled bool
 	var updatePath string
-	mockUpdateOpenCode := func(path, baseURL, apiKey string) error {
+	mockUpdateOpenCode := func(path, baseURL, apiKey, modelName string) error {
 		updateCalled = true
 		updatePath = path
 		return nil
@@ -371,7 +379,7 @@ opencode_config_path = "/tmp/config-from-file.json"
 	// Track which path the updater was called with
 	var updateCalled bool
 	var updatePath string
-	mockUpdateOpenCode := func(path, baseURL, apiKey string) error {
+	mockUpdateOpenCode := func(path, baseURL, apiKey, modelName string) error {
 		updateCalled = true
 		updatePath = path
 		return nil
@@ -412,7 +420,7 @@ func TestUp_OpenCodeConfig_SkipWhenEmpty(t *testing.T) {
 
 	// Track calls to the updater
 	var updateCalled bool
-	mockUpdateOpenCode := func(path, baseURL, apiKey string) error {
+	mockUpdateOpenCode := func(path, baseURL, apiKey, modelName string) error {
 		updateCalled = true
 		return nil
 	}
@@ -450,7 +458,7 @@ opencode_config_path = "/tmp/config.json"
 `
 	configPath := writeTestConfig(t, configContent)
 
-	mockUpdateOpenCode := func(path, baseURL, apiKey string) error {
+	mockUpdateOpenCode := func(path, baseURL, apiKey, modelName string) error {
 		return nil
 	}
 
@@ -513,7 +521,7 @@ opencode_config_path = "/tmp/config.json"
 `
 	configPath := writeTestConfig(t, configContent)
 
-	mockUpdateOpenCode := func(path, baseURL, apiKey string) error {
+	mockUpdateOpenCode := func(path, baseURL, apiKey, modelName string) error {
 		return errors.New("parent directory does not exist")
 	}
 
@@ -549,7 +557,7 @@ opencode_config_path = "/tmp/config.json"
 `
 	configPath := writeTestConfig(t, configContent)
 
-	mockUpdateOpenCode := func(path, baseURL, apiKey string) error {
+	mockUpdateOpenCode := func(path, baseURL, apiKey, modelName string) error {
 		return nil
 	}
 
@@ -587,7 +595,7 @@ opencode_config_path = "/tmp/config.json"
 	configPath := writeTestConfig(t, configContent)
 
 	var updateURL string
-	mockUpdateOpenCode := func(path, baseURL, apiKey string) error {
+	mockUpdateOpenCode := func(path, baseURL, apiKey, modelName string) error {
 		updateURL = baseURL
 		return nil
 	}

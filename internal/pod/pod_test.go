@@ -15,10 +15,11 @@ import (
 
 // mockPodClient implements PodClient for testing without real HTTP calls.
 type mockPodClient struct {
-	createFn     func(*config.Config, string) (string, error)
-	getStatusFn  func(string) (*PodStatus, error)
-	terminateFn  func(string) error
-	findByNameFn func(string) (string, error)
+	createFn      func(*config.Config, string) (string, error)
+	getStatusFn   func(string) (*PodStatus, error)
+	terminateFn   func(string) error
+	findByNameFn  func(string) (string, error)
+	getGPUTypesFn func() ([]GPUType, error)
 }
 
 func (m *mockPodClient) CreatePod(cfg *config.Config, llmAPIKey string) (string, error) {
@@ -47,6 +48,13 @@ func (m *mockPodClient) FindPodByName(name string) (string, error) {
 		return m.findByNameFn(name)
 	}
 	return "", errors.New("findByNameFn not set")
+}
+
+func (m *mockPodClient) GetGPUTypes() ([]GPUType, error) {
+	if m.getGPUTypesFn != nil {
+		return m.getGPUTypesFn()
+	}
+	return nil, errors.New("getGPUTypesFn not set")
 }
 
 // shortTick is a fast polling interval used by tests to avoid real-time waits.
@@ -455,5 +463,79 @@ func TestRunPodClient_HTTPError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "500") {
 		t.Errorf("expected HTTP status code in error message, got: %v", err)
+	}
+}
+
+// TestRunPodClient_GetGPUTypes_ReturnsGPUs verifies that GetGPUTypes queries the GPU
+// types and correctly parses the response.
+func TestRunPodClient_GetGPUTypes_ReturnsGPUs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"gpuTypes":[
+			{
+				"id":"AMPERE_16",
+				"displayName":"RTX A4000",
+				"memoryInGb":16,
+				"securePrice":0.44,
+				"communityPrice":0.22,
+				"secureSpotPrice":0.22,
+				"communitySpotPrice":0.11,
+				"secureCloud":true,
+				"communityCloud":true
+			},
+			{
+				"id":"ADA_LOVELACE_24",
+				"displayName":"RTX 5880 Ada",
+				"memoryInGb":24,
+				"securePrice":0.98,
+				"communityPrice":0.49,
+				"secureSpotPrice":0.49,
+				"communitySpotPrice":0.25,
+				"secureCloud":false,
+				"communityCloud":true
+			}
+		]}}`))
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL)
+	gpus, err := client.GetGPUTypes()
+	if err != nil {
+		t.Fatalf("GetGPUTypes returned error: %v", err)
+	}
+
+	if len(gpus) != 2 {
+		t.Errorf("expected 2 GPUs, got %d", len(gpus))
+	}
+
+	// Check first GPU
+	if gpus[0].ID != "AMPERE_16" {
+		t.Errorf("expected first GPU ID 'AMPERE_16', got %q", gpus[0].ID)
+	}
+	if gpus[0].DisplayName != "RTX A4000" {
+		t.Errorf("expected display name 'RTX A4000', got %q", gpus[0].DisplayName)
+	}
+	if gpus[0].MemoryInGb != 16 {
+		t.Errorf("expected 16GB memory, got %d", gpus[0].MemoryInGb)
+	}
+	if gpus[0].SecurePrice != 0.44 {
+		t.Errorf("expected secure price 0.44, got %f", gpus[0].SecurePrice)
+	}
+	if !gpus[0].SecureCloud {
+		t.Error("expected first GPU SecureCloud=true")
+	}
+	if !gpus[0].CommunityCloud {
+		t.Error("expected first GPU CommunityCloud=true")
+	}
+
+	// Check second GPU
+	if gpus[1].ID != "ADA_LOVELACE_24" {
+		t.Errorf("expected second GPU ID 'ADA_LOVELACE_24', got %q", gpus[1].ID)
+	}
+	if gpus[1].SecureCloud {
+		t.Error("expected second GPU SecureCloud=false")
+	}
+	if !gpus[1].CommunityCloud {
+		t.Error("expected second GPU CommunityCloud=true")
 	}
 }

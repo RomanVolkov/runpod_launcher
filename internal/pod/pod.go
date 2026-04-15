@@ -83,6 +83,21 @@ type PodStatus struct {
 	DesiredStatus string
 }
 
+// GPUType holds information about a GPU type on RunPod.
+type GPUType struct {
+	ID                       string
+	DisplayName              string
+	MemoryInGb               int
+	SecurePrice              float64
+	CommunityPrice           float64
+	SecureSpotPrice          float64
+	CommunitySpotPrice       float64
+	SecureCloud              bool
+	CommunityCloud           bool
+	SecureCloudAvailable     int
+	CommunityCloudAvailable  int
+}
+
 // PodClient is the interface for interacting with RunPod's pod management API.
 // It is designed for easy test mocking without external HTTP.
 type PodClient interface {
@@ -98,6 +113,9 @@ type PodClient interface {
 	// FindPodByName returns the pod ID of a running pod with the given name,
 	// or ("", nil) if no such pod is found.
 	FindPodByName(name string) (string, error)
+
+	// GetGPUTypes returns a list of available GPU types with pricing and availability info.
+	GetGPUTypes() ([]GPUType, error)
 }
 
 const runpodGraphQLEndpoint = "https://api.runpod.io/graphql"
@@ -619,4 +637,77 @@ func WaitForModelReady(baseURL, modelName, apiKey string, timeout time.Duration,
 		fmt.Fprint(stderr, ".")
 		time.Sleep(interval)
 	}
+}
+
+// GetGPUTypes queries RunPod for available GPU types with pricing and availability info.
+func (c *RunPodClient) GetGPUTypes() ([]GPUType, error) {
+	query := `
+query ListGpuTypes {
+  gpuTypes {
+    id
+    displayName
+    memoryInGb
+    securePrice
+    communityPrice
+    secureSpotPrice
+    communitySpotPrice
+    secureCloud
+    communityCloud
+  }
+}`
+
+	result, err := c.graphqlRequest(query, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	data, ok := result["data"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected RunPod API response: %v", result)
+	}
+
+	gpuTypesData, ok := data["gpuTypes"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("gpuTypes not found or not an array in response: %v", data)
+	}
+
+	var gpuTypes []GPUType
+	for _, gpu := range gpuTypesData {
+		gpuMap, ok := gpu.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		gpuType := GPUType{
+			ID:          stringField(gpuMap, "id"),
+			DisplayName: stringField(gpuMap, "displayName"),
+		}
+
+		// Parse numeric fields
+		if memStr, ok := gpuMap["memoryInGb"].(float64); ok {
+			gpuType.MemoryInGb = int(memStr)
+		}
+		if price, ok := gpuMap["securePrice"].(float64); ok {
+			gpuType.SecurePrice = price
+		}
+		if price, ok := gpuMap["communityPrice"].(float64); ok {
+			gpuType.CommunityPrice = price
+		}
+		if price, ok := gpuMap["secureSpotPrice"].(float64); ok {
+			gpuType.SecureSpotPrice = price
+		}
+		if price, ok := gpuMap["communitySpotPrice"].(float64); ok {
+			gpuType.CommunitySpotPrice = price
+		}
+		if secure, ok := gpuMap["secureCloud"].(bool); ok {
+			gpuType.SecureCloud = secure
+		}
+		if community, ok := gpuMap["communityCloud"].(bool); ok {
+			gpuType.CommunityCloud = community
+		}
+
+		gpuTypes = append(gpuTypes, gpuType)
+	}
+
+	return gpuTypes, nil
 }
