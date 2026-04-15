@@ -85,17 +85,17 @@ type PodStatus struct {
 
 // GPUType holds information about a GPU type on RunPod.
 type GPUType struct {
-	ID                       string
-	DisplayName              string
-	MemoryInGb               int
-	SecurePrice              float64
-	CommunityPrice           float64
-	SecureSpotPrice          float64
-	CommunitySpotPrice       float64
-	SecureCloud              bool
-	CommunityCloud           bool
-	SecureCloudAvailable     int
-	CommunityCloudAvailable  int
+	ID                         string
+	DisplayName                string
+	MemoryInGb                 int
+	SecurePrice                float64
+	CommunityPrice             float64
+	SecureSpotPrice            float64
+	CommunitySpotPrice         float64
+	SecureCloud                bool
+	CommunityCloud             bool
+	MaxGpuCountSecureCloud     int // Max simultaneously rentable GPUs on secure cloud (0 = unavailable)
+	MaxGpuCountCommunityCloud  int // Max simultaneously rentable GPUs on community cloud (0 = unavailable)
 }
 
 // PodClient is the interface for interacting with RunPod's pod management API.
@@ -653,6 +653,8 @@ query ListGpuTypes {
     communitySpotPrice
     secureCloud
     communityCloud
+    maxGpuCountSecureCloud
+    maxGpuCountCommunityCloud
   }
 }`
 
@@ -704,6 +706,12 @@ query ListGpuTypes {
 		}
 		if community, ok := gpuMap["communityCloud"].(bool); ok {
 			gpuType.CommunityCloud = community
+		}
+		if maxCount, ok := gpuMap["maxGpuCountSecureCloud"].(float64); ok {
+			gpuType.MaxGpuCountSecureCloud = int(maxCount)
+		}
+		if maxCount, ok := gpuMap["maxGpuCountCommunityCloud"].(float64); ok {
+			gpuType.MaxGpuCountCommunityCloud = int(maxCount)
 		}
 
 		gpuTypes = append(gpuTypes, gpuType)

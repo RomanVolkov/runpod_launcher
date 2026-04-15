@@ -17,6 +17,7 @@ import (
 var upJSON bool
 var upOpenCodeConfig string
 var upRegion string
+var upSelectGPU bool
 
 // upWaitTimeout is the maximum time to wait for a pod to become RUNNING.
 // Tests override this to keep test execution fast.
@@ -39,6 +40,7 @@ func init() {
 	upCmd.Flags().BoolVar(&upJSON, "json", false, "output result as JSON")
 	upCmd.Flags().StringVar(&upOpenCodeConfig, "opencode-config", "", "path to OpenCode config JSON (optional; overrides config file value)")
 	upCmd.Flags().StringVar(&upRegion, "region", "", "RunPod region (optional; overrides config file value; e.g. EU, US-EAST)")
+	upCmd.Flags().BoolVar(&upSelectGPU, "select-gpu", false, "skip confirmation and go directly to GPU selection")
 }
 
 func runUp(cmd *cobra.Command, args []string) error {
@@ -72,6 +74,12 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 	if existingID != "" {
 		return printUpResult(cmd, upJSON, existingID, true, cfg, "")
+	}
+
+	// Prompt for GPU selection
+	err = promptForGPUSelection(cmd, client, cfg)
+	if err != nil {
+		return err
 	}
 
 	podID, err := client.CreatePod(cfg, llmAPIKey)

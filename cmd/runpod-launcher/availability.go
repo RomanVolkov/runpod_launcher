@@ -15,6 +15,17 @@ import (
 var availabilityJSON bool
 var availabilityAllClouds bool
 
+// formatAvailability converts max GPU count to a human-readable availability string
+func formatAvailability(maxCount int) string {
+	if maxCount > 10 {
+		return fmt.Sprintf("High (%d)", maxCount)
+	}
+	if maxCount > 0 {
+		return fmt.Sprintf("Limited (%d)", maxCount)
+	}
+	return "Unavailable"
+}
+
 var availabilityCmd = &cobra.Command{
 	Use:   "availability",
 	Short: "List available GPU types with pricing and specifications",
@@ -69,26 +80,27 @@ func runAvailability(cmd *cobra.Command, args []string) error {
 	if availabilityAllClouds {
 		fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tSECURE AVAIL\tCOMMUNITY AVAIL\tSECURE PRICE\tCOMMUNITY PRICE")
 		for _, gpu := range gpuTypes {
-			communityAvail := "No"
-			if gpu.CommunityCloud {
-				communityAvail = "Yes"
-			}
-			fmt.Fprintf(w, "%s\t%s\t%dGB\tYes\t%s\t$%.4f/hr\t$%.4f/hr\n",
+			secureAvail := formatAvailability(gpu.MaxGpuCountSecureCloud)
+			communityAvail := formatAvailability(gpu.MaxGpuCountCommunityCloud)
+			fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\t%s\t$%.4f/hr\t$%.4f/hr\n",
 				gpu.ID,
 				gpu.DisplayName,
 				gpu.MemoryInGb,
+				secureAvail,
 				communityAvail,
 				gpu.SecurePrice,
 				gpu.CommunityPrice,
 			)
 		}
 	} else {
-		fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tSECURE PRICE")
+		fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tAVAILABILITY\tSECURE PRICE")
 		for _, gpu := range gpuTypes {
-			fmt.Fprintf(w, "%s\t%s\t%dGB\t$%.4f/hr\n",
+			avail := formatAvailability(gpu.MaxGpuCountSecureCloud)
+			fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\t$%.4f/hr\n",
 				gpu.ID,
 				gpu.DisplayName,
 				gpu.MemoryInGb,
+				avail,
 				gpu.SecurePrice,
 			)
 		}

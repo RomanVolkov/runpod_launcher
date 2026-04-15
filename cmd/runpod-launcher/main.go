@@ -22,12 +22,16 @@ var rootCmd = &cobra.Command{
 RunPod direct proxy so your OpenCode config never needs updating.
 
 Usage:
-  runpod-launcher up            - create pod and wait until ready
-  runpod-launcher down          - terminate pod and stop billing
-  runpod-launcher status        - check pod status
-  runpod-launcher model-status  - check if a model is loaded and ready
-  runpod-launcher availability  - list available GPU types with pricing
-  runpod-launcher init          - create default config file`,
+  runpod-launcher up                - create pod (interactive GPU selection available)
+  runpod-launcher down              - terminate pod and stop billing
+  runpod-launcher status            - check pod status
+  runpod-launcher model-status      - check if a model is loaded and ready
+  runpod-launcher availability      - list available GPU types with pricing
+  runpod-launcher init              - create default config file
+
+Interactive Features:
+  The 'up' command will ask if you want to select a different GPU with a
+  beautiful TUI that supports filtering, navigation, and sorting by price.`,
 }
 
 func main() {
