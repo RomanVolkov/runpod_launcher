@@ -9,7 +9,7 @@
 
 **RunPod Launcher** is a command-line tool that simplifies spinning up GPU pods on RunPod to serve large language models (LLMs) using Ollama. No more manual pod creation, model downloads, or complex configurations—just a single command to deploy a fully functional inference server.
 
-Built in Go with the Cobra CLI framework, this tool automates the entire workflow: pod creation, model loading, API key generation, and OpenCode integration. It provides a simple, reliable way to deploy models like Gemma 4, Qwen, Mistral, and others on RunPod's distributed GPU infrastructure.
+Built in Go with the Cobra CLI framework, this tool automates the entire workflow: pod creation, interactive GPU selection with real-time availability checking, model loading, API key generation, and OpenCode integration. It provides a simple, reliable way to deploy models like Gemma 4, Qwen, Mistral, and others on RunPod's distributed GPU infrastructure with an intuitive terminal UI for GPU browsing and selection.
 
 **Perfect for:**
 - ML engineers who want quick LLM serving without DevOps complexity
@@ -45,7 +45,10 @@ go install ./cmd/runpod-launcher/
 # Initialize configuration
 runpod-launcher init
 
-# Start a pod with defined in config model
+# Check available GPUs and pricing
+runpod-launcher availability
+
+# Start a pod with GPU selection (or use config default)
 runpod-launcher up
 
 # Check model status
@@ -114,10 +117,14 @@ runpod-launcher init
 
 ### `runpod-launcher up`
 
-Create and start a new pod, pull the model, and wait for it to be ready.
+Create and start a new pod, pull the model, and wait for it to be ready. Optionally select a GPU interactively.
 
 ```bash
-# Basic usage
+# Basic usage (uses GPU from config)
+runpod-launcher up
+
+# Interactive GPU selection with beautiful TUI
+# Follow the prompts to browse and select a GPU
 runpod-launcher up
 
 # Override region
@@ -126,6 +133,30 @@ runpod-launcher up --region "US-EAST"
 # Output as JSON
 runpod-launcher up --json
 ```
+
+The `up` command will prompt you to select a GPU if your configured GPU is unavailable, or you can manually choose a different GPU during deployment using the interactive TUI.
+
+### `runpod-launcher availability`
+
+List all available GPU types from RunPod with real-time pricing, specifications, and stock status.
+
+```bash
+# Show available GPUs (secure cloud only, default)
+runpod-launcher availability
+
+# Show all available GPUs (both secure and community cloud)
+runpod-launcher availability --all-clouds
+
+# Output as JSON
+runpod-launcher availability --json
+```
+
+Output includes:
+- GPU name and specifications
+- Hourly pricing ($/hr)
+- Stock availability (High, Limited, Unavailable)
+- Memory and VRAM details
+- Secure vs. Community Cloud designation
 
 ### `runpod-launcher down`
 
@@ -200,6 +231,10 @@ runpod-launcher/
 ## Key Features
 
 ✅ **One-Command Deployment** — Single command to spin up fully functional LLM server
+
+✅ **Interactive GPU Selection** — Beautiful TUI with real-time availability, filtering, and price sorting
+
+✅ **GPU Availability Checking** — Query RunPod's current GPU inventory with pricing and specifications
 
 ✅ **Auto-Generated API Keys** — Secure, random keys created automatically
 
