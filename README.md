@@ -134,29 +134,117 @@ runpod-launcher up --region "US-EAST"
 runpod-launcher up --json
 ```
 
-The `up` command will prompt you to select a GPU if your configured GPU is unavailable, or you can manually choose a different GPU during deployment using the interactive TUI.
+#### Interactive GPU Selection Example
+
+When you run `runpod-launcher up`, if your configured GPU is unavailable or you use `--select-gpu`, you'll get an interactive terminal UI:
+
+```
+Fetching available GPUs...
+
+┌────────────────────────────────────────────────────────────┐
+│ Select a GPU (↑/↓ or j/k to navigate, / to filter, Enter) │
+├────────────────────────────────────────────────────────────┤
+│ ▶ NVIDIA RTX 6000 Ada       │ 48GB │ High (12)  │ $0.44/hr  │
+│   NVIDIA A100-40GB-PCIE     │ 40GB │ Limited(5) │ $0.62/hr  │
+│   NVIDIA RTX 5880 Ada       │ 48GB │ High (8)   │ $0.48/hr  │
+│   NVIDIA L40S              │ 48GB │ Limited(3) │ $0.72/hr  │
+└────────────────────────────────────────────────────────────┘
+```
+
+**Navigation:**
+- `↑` / `↓` or `j` / `k` — Move selection up/down
+- `/` — Enter filter mode to search by GPU name
+- `Enter` — Select highlighted GPU and deploy
+- `ctrl+c` or `q` — Cancel selection
+
+**Example filtering:**
+```
+Filter: a100
+┌────────────────────────────────────────────────────────────┐
+│ ▶ NVIDIA A100-40GB-PCIE     │ 40GB │ Limited(5) │ $0.62/hr  │
+│   NVIDIA A100-80GB          │ 80GB │ High (2)   │ $1.24/hr  │
+└────────────────────────────────────────────────────────────┘
+```
+
+After selection, the pod will be created with your chosen GPU and you'll see:
+```
+Creating pod...
+........
+Pod is ready: pod-abc123def456
+URL: https://pod-abc123def456-8000.proxy.runpod.net
+API Key: your-generated-api-key
+```
 
 ### `runpod-launcher availability`
 
-List all available GPU types from RunPod with real-time pricing, specifications, and stock status.
+List deployable GPU types filtered by your config constraints (region, CUDA version, secure cloud). Shows only GPUs you can actually deploy with `up`.
 
 ```bash
-# Show available GPUs (secure cloud only, default)
+# Show available GPUs based on config (secure cloud, your region, your CUDA version)
 runpod-launcher availability
 
-# Show all available GPUs (both secure and community cloud)
-runpod-launcher availability --all-clouds
+# Override region for this query
+runpod-launcher availability --region "US-WEST"
+
+# Override CUDA version for this query
+runpod-launcher availability --cuda-version "12.1"
+
+# Override both
+runpod-launcher availability --region "EU" --cuda-version "13.0"
 
 # Output as JSON
 runpod-launcher availability --json
 ```
 
+**Applied Filters (from config, unless overridden by flags):**
+- **Cloud:** Always Secure Cloud (matches `up` behavior)
+- **Region:** From config or `--region` flag (empty = any region)
+- **CUDA Version:** From config or `--cuda-version` flag (empty = any CUDA version)
+
 Output includes:
 - GPU name and specifications
 - Hourly pricing ($/hr)
-- Stock availability (High, Limited, Unavailable)
-- Memory and VRAM details
-- Secure vs. Community Cloud designation
+- Current availability (High, Limited, Unavailable)
+- Memory details
+
+**All GPUs listed here are immediately deployable with your constraints.** Just run `runpod-launcher up` to deploy one, or use `up --select-gpu` to interactively choose a different GPU.
+
+#### Typical Workflow
+
+```bash
+# 1. Check what GPUs are available with your constraints
+$ runpod-launcher availability
+Filters: Cloud=Secure, Region=(any), CudaVersion=(any)
+
+Available GPUs (Secure Cloud, Region=(any), CUDA=(any)):
+
+GPU TYPE ID         NAME                      MEMORY  AVAILABILITY    SECURE PRICE
+NVIDIA_RTX_6000_ADA NVIDIA RTX 6000 Ada       48GB    High (12)       $0.4400/hr
+NVIDIA_A100_40GB    NVIDIA A100-40GB-PCIE     40GB    Limited (5)     $0.6200/hr
+NVIDIA_L40S         NVIDIA L40S               48GB    Limited (3)     $0.7200/hr
+
+# 2. Deploy with interactive GPU selection
+$ runpod-launcher up --select-gpu
+# → TUI appears, you select "NVIDIA RTX 6000 Ada"
+# → Pod launches and becomes ready
+
+# 3. Check pod status anytime
+$ runpod-launcher status
+pod-abc123: RUNNING
+
+# 4. Verify model is ready
+$ runpod-launcher model-status
+Model gemma4:latest is loaded and ready
+
+# 5. Query your model
+$ curl https://pod-abc123-8000.proxy.runpod.net/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gemma4:latest", "messages": [{"role": "user", "content": "Hello!"}]}'
+
+# 6. Tear down when done
+$ runpod-launcher down
+Pod terminated: pod-abc123
+```
 
 ### `runpod-launcher down`
 

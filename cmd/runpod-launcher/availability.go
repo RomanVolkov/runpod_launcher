@@ -14,6 +14,8 @@ import (
 
 var availabilityJSON bool
 var availabilityAllClouds bool
+var availabilityRegion string
+var availabilityCudaVersion string
 
 // formatAvailability converts max GPU count to a human-readable availability string
 func formatAvailability(maxCount int) string {
@@ -26,6 +28,14 @@ func formatAvailability(maxCount int) string {
 	return "Unavailable"
 }
 
+// orEmpty returns "(any)" if s is empty, otherwise returns s
+func orEmpty(s string) string {
+	if s == "" {
+		return "(any)"
+	}
+	return s
+}
+
 var availabilityCmd = &cobra.Command{
 	Use:   "availability",
 	Short: "List available GPU types with pricing and specifications",
@@ -35,6 +45,8 @@ var availabilityCmd = &cobra.Command{
 func init() {
 	availabilityCmd.Flags().BoolVar(&availabilityJSON, "json", false, "output result as JSON")
 	availabilityCmd.Flags().BoolVar(&availabilityAllClouds, "all-clouds", false, "show both secure and community cloud availability (default: secure only)")
+	availabilityCmd.Flags().StringVar(&availabilityRegion, "region", "", "filter by region (overrides config; empty = any region)")
+	availabilityCmd.Flags().StringVar(&availabilityCudaVersion, "cuda-version", "", "filter by CUDA version (overrides config; empty = any CUDA version)")
 }
 
 func runAvailability(cmd *cobra.Command, args []string) error {
@@ -43,22 +55,39 @@ func runAvailability(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Resolve effective region and CUDA version from flags or config
+	region := availabilityRegion
+	if region == "" {
+		region = cfg.Region
+	}
+	cudaVersion := availabilityCudaVersion
+	if cudaVersion == "" {
+		cudaVersion = cfg.CudaVersion
+	}
+
 	client := newPodClient(cfg.RunpodAPIKey)
 	gpuTypes, err := client.GetGPUTypes()
 	if err != nil {
 		return fmt.Errorf("failed to query GPU types: %w", err)
 	}
 
-	// Filter to secure availability by default
-	if !availabilityAllClouds {
-		var filtered []pod.GPUType
-		for _, gpu := range gpuTypes {
-			if gpu.SecureCloud {
-				filtered = append(filtered, gpu)
-			}
+	// Display filter info to user
+	fmt.Fprintf(cmd.ErrOrStderr(), "Filters: Cloud=Secure, Region=%s, CudaVersion=%s\n\n",
+		orEmpty(region), orEmpty(cudaVersion))
+
+	// Always filter to secure cloud (matches CreatePod behavior)
+	var filtered []pod.GPUType
+	for _, gpu := range gpuTypes {
+		if !gpu.SecureCloud {
+			continue
 		}
-		gpuTypes = filtered
+		// If GPU has zero availability in secure cloud, skip it
+		if gpu.MaxGpuCountSecureCloud == 0 {
+			continue
+		}
+		filtered = append(filtered, gpu)
 	}
+	gpuTypes = filtered
 
 	// Sort by secure cloud price (cheapest first), then by ID for consistent ordering
 	sort.Slice(gpuTypes, func(i, j int) bool {
@@ -76,6 +105,9 @@ func runAvailability(cmd *cobra.Command, args []string) error {
 
 	// Print human-readable table
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Available GPUs (Secure Cloud, Region=%s, CUDA=%s):\n\n",
+		orEmpty(region), orEmpty(cudaVersion))
 
 	if availabilityAllClouds {
 		fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tSECURE AVAIL\tCOMMUNITY AVAIL\tSECURE PRICE\tCOMMUNITY PRICE")
@@ -107,5 +139,6 @@ func runAvailability(cmd *cobra.Command, args []string) error {
 	}
 	w.Flush()
 
+	fmt.Fprintf(cmd.OutOrStdout(), "\nThese GPUs are deployable with your current constraints. Use with: runpod-launcher up\n")
 	return nil
 }
