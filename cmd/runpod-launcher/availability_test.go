@@ -35,8 +35,9 @@ func TestAvailability_JSONOutput(t *testing.T) {
 					CommunityPrice:            0.49,
 					SecureSpotPrice:           0.49,
 					CommunitySpotPrice:        0.25,
-					SecureCloud:               false,
+					SecureCloud:               true,
 					CommunityCloud:            true,
+					MaxGpuCountSecureCloud:    5,
 					MaxGpuCountCommunityCloud: 12,
 				},
 			}, nil
@@ -57,9 +58,13 @@ func TestAvailability_JSONOutput(t *testing.T) {
 	// Test with JSON flag
 	origAvailabilityJSON := availabilityJSON
 	origAvailabilityAllClouds := availabilityAllClouds
+	origAvailabilityRegion := availabilityRegion
+	origAvailabilityCudaVersion := availabilityCudaVersion
 	t.Cleanup(func() {
 		availabilityJSON = origAvailabilityJSON
 		availabilityAllClouds = origAvailabilityAllClouds
+		availabilityRegion = origAvailabilityRegion
+		availabilityCudaVersion = origAvailabilityCudaVersion
 	})
 	availabilityJSON = true
 	availabilityAllClouds = true // Include all clouds for this test
@@ -115,9 +120,13 @@ func TestAvailability_TableOutput(t *testing.T) {
 	// Test with table output (secure only, default)
 	origAvailabilityJSON := availabilityJSON
 	origAvailabilityAllClouds := availabilityAllClouds
+	origAvailabilityRegion := availabilityRegion
+	origAvailabilityCudaVersion := availabilityCudaVersion
 	t.Cleanup(func() {
 		availabilityJSON = origAvailabilityJSON
 		availabilityAllClouds = origAvailabilityAllClouds
+		availabilityRegion = origAvailabilityRegion
+		availabilityCudaVersion = origAvailabilityCudaVersion
 	})
 	availabilityJSON = false
 	availabilityAllClouds = false // Only secure, default behavior
