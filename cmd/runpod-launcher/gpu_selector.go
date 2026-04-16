@@ -13,7 +13,7 @@ import (
 // selectGPUType presents the user with an interactive GPU selection using bubble tea TUI.
 // It fetches available GPUs, filters to secure-only, and lets the user pick one.
 // Returns the selected GPU's ID.
-func selectGPUType(cmd *cobra.Command, client pod.PodClient, currentGPUTypeID string) (string, error) {
+func selectGPUType(cmd *cobra.Command, client pod.PodClient, currentGPUTypeID, region, cudaVersion string) (string, error) {
 	stderr := cmd.ErrOrStderr()
 	fmt.Fprintf(stderr, "Fetching available GPUs...\n")
 
@@ -40,7 +40,7 @@ func selectGPUType(cmd *cobra.Command, client pod.PodClient, currentGPUTypeID st
 	sortGPUsByStockAndPrice(secureGPUs)
 
 	// Use bubble tea TUI for selection
-	selected, err := selectGPUTypeTUI(secureGPUs)
+	selected, err := selectGPUTypeTUI(secureGPUs, region, cudaVersion)
 	if err != nil {
 		return "", err
 	}
@@ -129,7 +129,7 @@ func promptForGPUSelection(cmd *cobra.Command, client pod.PodClient, cfg *config
 	}
 
 	// User wants to select a GPU
-	selectedGPU, err := selectGPUType(cmd, client, cfg.GPUTypeID)
+	selectedGPU, err := selectGPUType(cmd, client, cfg.GPUTypeID, cfg.Region, cfg.CudaVersion)
 	if err != nil {
 		return fmt.Errorf("failed to select GPU: %w", err)
 	}

@@ -136,34 +136,49 @@ runpod-launcher up --json
 
 #### Interactive GPU Selection Example
 
-When you run `runpod-launcher up`, if your configured GPU is unavailable or you use `--select-gpu`, you'll get an interactive terminal UI:
+When you run `runpod-launcher up`, if your configured GPU is unavailable or you use `--select-gpu`, you'll get an interactive terminal UI with your deployment filters displayed:
 
+**Without region/CUDA constraints:**
 ```
 Fetching available GPUs...
 
-┌────────────────────────────────────────────────────────────┐
-│ Select a GPU (↑/↓ or j/k to navigate, / to filter, Enter) │
-├────────────────────────────────────────────────────────────┤
-│ ▶ NVIDIA RTX 6000 Ada       │ 48GB │ High (12)  │ $0.44/hr  │
-│   NVIDIA A100-40GB-PCIE     │ 40GB │ Limited(5) │ $0.62/hr  │
-│   NVIDIA RTX 5880 Ada       │ 48GB │ High (8)   │ $0.48/hr  │
-│   NVIDIA L40S              │ 48GB │ Limited(3) │ $0.72/hr  │
-└────────────────────────────────────────────────────────────┘
+┌─ Select GPU (Secure Cloud, Region=(any), CUDA=(any))
+│  ↑/↓ or k/j: navigate | Enter: select | /: filter | q: quit
+│
+│  ▶ NVIDIA RTX 6000 Ada              48GB  High (12)       $0.4400/hr
+│    NVIDIA A100-40GB-PCIE            40GB  Limited (5)     $0.6200/hr
+│    NVIDIA RTX 5880 Ada              48GB  High (8)        $0.4800/hr
+│    NVIDIA L40S                      48GB  Limited (3)     $0.7200/hr
+└─  H100-SXM-80GB                    80GB  High (2)        $1.3900/hr
+```
+
+**With region and CUDA version constraints:**
+```
+Fetching available GPUs...
+
+┌─ Select GPU (Secure Cloud, Region=US-WEST, CUDA=12.1)
+│  ↑/↓ or k/j: navigate | Enter: select | /: filter | q: quit
+│
+│  ▶ NVIDIA RTX 6000 Ada              48GB  High (12)       $0.4400/hr
+│    NVIDIA A100-40GB-PCIE            40GB  Limited (5)     $0.6200/hr
+└─  NVIDIA L40S                      48GB  Limited (3)     $0.7200/hr
 ```
 
 **Navigation:**
 - `↑` / `↓` or `j` / `k` — Move selection up/down
-- `/` — Enter filter mode to search by GPU name
+- `/` — Enter filter mode to search by GPU name or ID
 - `Enter` — Select highlighted GPU and deploy
 - `ctrl+c` or `q` — Cancel selection
 
-**Example filtering:**
+**Example filtering (press `/` then type):**
 ```
-Filter: a100
-┌────────────────────────────────────────────────────────────┐
-│ ▶ NVIDIA A100-40GB-PCIE     │ 40GB │ Limited(5) │ $0.62/hr  │
-│   NVIDIA A100-80GB          │ 80GB │ High (2)   │ $1.24/hr  │
-└────────────────────────────────────────────────────────────┘
+┌─ Select GPU (Secure Cloud, Region=(any), CUDA=(any))
+│  ↑/↓ or k/j: navigate | Enter: select | /: filter | q: quit
+│  Search: a100
+│
+│  ▶ NVIDIA A100-40GB-PCIE            40GB  Limited (5)     $0.6200/hr
+│  NVIDIA A100-80GB                   80GB  High (2)        $1.2400/hr
+└
 ```
 
 After selection, the pod will be created with your chosen GPU and you'll see:

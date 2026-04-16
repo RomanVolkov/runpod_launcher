@@ -21,14 +21,18 @@ type GPUSelectorModel struct {
 	filteredGPUs  []pod.GPUType
 	filterMode    bool
 	quitting      bool
+	region        string
+	cudaVersion   string
 }
 
 // NewGPUSelectorModel creates a new GPU selector model
-func NewGPUSelectorModel(gpus []pod.GPUType) *GPUSelectorModel {
+func NewGPUSelectorModel(gpus []pod.GPUType, region, cudaVersion string) *GPUSelectorModel {
 	m := &GPUSelectorModel{
 		gpus:         gpus,
 		filteredGPUs: gpus,
 		cursor:       0,
+		region:       region,
+		cudaVersion:  cudaVersion,
 	}
 	return m
 }
@@ -126,11 +130,24 @@ func (m *GPUSelectorModel) View() string {
 
 	var s string
 
+	// Build header with filter info
+	headerParts := []string{"Secure Cloud"}
+	if m.region != "" {
+		headerParts = append(headerParts, fmt.Sprintf("Region=%s", m.region))
+	} else {
+		headerParts = append(headerParts, "Region=(any)")
+	}
+	if m.cudaVersion != "" {
+		headerParts = append(headerParts, fmt.Sprintf("CUDA=%s", m.cudaVersion))
+	} else {
+		headerParts = append(headerParts, "CUDA=(any)")
+	}
+
 	// Header
 	s += lipgloss.NewStyle().
 		Foreground(lipgloss.Color("33")).
 		Bold(true).
-		Render("┌─ Select GPU (Secure Cloud)") + "\n"
+		Render("┌─ Select GPU ("+strings.Join(headerParts, ", ")+")") + "\n"
 
 	s += lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")).
@@ -187,16 +204,9 @@ func (m *GPUSelectorModel) View() string {
 			selected = "→ "
 		}
 
-		// Show availability indicator based on max GPU count
-		availability := "?"
-		if gpu.MaxGpuCountSecureCloud > 10 {
-			availability = "✓"
-		} else if gpu.MaxGpuCountSecureCloud > 0 {
-			availability = "◐"
-		} else {
-			availability = "✗"
-		}
-		line := fmt.Sprintf("%s%-40s %3dGB  [%s]  $%.4f/hr",
+		// Show availability in same format as availability command
+		availability := formatAvailability(gpu.MaxGpuCountSecureCloud)
+		line := fmt.Sprintf("%s%-35s %3dGB  %-15s  $%.4f/hr",
 			selected, gpu.DisplayName, gpu.MemoryInGb, availability, gpu.SecurePrice)
 
 		if i == m.cursor {
@@ -213,8 +223,8 @@ func (m *GPUSelectorModel) View() string {
 }
 
 // selectGPUTypeTUI displays an interactive GPU selector using bubble tea
-func selectGPUTypeTUI(gpus []pod.GPUType) (string, error) {
-	m := NewGPUSelectorModel(gpus)
+func selectGPUTypeTUI(gpus []pod.GPUType, region, cudaVersion string) (string, error) {
+	m := NewGPUSelectorModel(gpus, region, cudaVersion)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	finalModel, err := p.Run()
 	if err != nil {
