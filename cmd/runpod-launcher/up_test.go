@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,13 +90,31 @@ func executeUpDirect(t *testing.T, configPath string, jsonFlag bool) (string, er
 
 	origCfgFile := cfgFile
 	origUpJSON := upJSON
+	origGetOllamaContext := pod.GetOllamaModelContextFunc
+	origWaitModelReady := pod.WaitForModelReadyFunc
+	origWaitTimeout := upWaitTimeout
+	origWaitTick := upWaitTick
 	t.Cleanup(func() {
 		cfgFile = origCfgFile
 		upJSON = origUpJSON
+		pod.GetOllamaModelContextFunc = origGetOllamaContext
+		pod.WaitForModelReadyFunc = origWaitModelReady
+		upWaitTimeout = origWaitTimeout
+		upWaitTick = origWaitTick
 	})
 
 	cfgFile = configPath
 	upJSON = jsonFlag
+	upWaitTimeout = 5 * time.Second // Short timeout for tests
+	upWaitTick = 10 * time.Millisecond // Fast polling for tests
+	// Mock GetOllamaModelContext to avoid network calls in tests
+	pod.GetOllamaModelContextFunc = func(modelName string) (int, error) {
+		return 0, nil // Return 0 to skip context window setting (safe for tests)
+	}
+	// Mock WaitForModelReady to skip actual model loading checks in tests
+	pod.WaitForModelReadyFunc = func(baseURL, modelName, apiKey string, timeout time.Duration, stderr io.Writer, tickInterval ...time.Duration) error {
+		return nil // Skip model ready check in tests
+	}
 
 	var stdout bytes.Buffer
 	upCmd.SetOut(&stdout)

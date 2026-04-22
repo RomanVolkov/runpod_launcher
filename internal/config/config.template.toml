@@ -37,6 +37,17 @@ volume_mount_path = "/workspace"
 # Leave at 0 to use the model's default
 max_model_len = 0
 
+# Ollama context window in tokens (OLLAMA_CONTEXT_LENGTH override)
+# Set this to override the auto-detected context length for Ollama
+# Examples:
+#   - Set to 262144 for full context on large GPUs (>= 48 GiB VRAM)
+#   - Set to 32768 for safe operation on medium GPUs (24-48 GiB VRAM)
+#   - Set to 8192 for limited memory scenarios
+# Leave at 0 to use auto-detection based on model name
+# Auto-detection uses Ollama's official model specs: gemma4=262K, llama3.1=128K, mistral=32K, etc.
+# NOTE: Larger context uses more VRAM; verify your GPU has sufficient memory
+ollama_context_len = 0
+
 # Tool call parser for auto tool choice
 # Enable automatic tool calling for models that support it
 # For Qwen 3.x models: "qwen3_xml" or "qwen3_coder"

@@ -8,10 +8,6 @@ import (
 	"regexp"
 )
 
-// validModelName matches safe model name strings: alphanumeric, slashes, hyphens, underscores, dots.
-// This covers typical HuggingFace model IDs like "mistralai/Mistral-7B-Instruct-v0.2".
-var validModelName = regexp.MustCompile(`^[a-zA-Z0-9/_\-\.]+$`)
-
 // BuildStartupScript returns a command string suitable for injection as a RunPod pod startup
 // (via the dockerArgs field). The command starts the Ollama server and pulls the specified model.
 //

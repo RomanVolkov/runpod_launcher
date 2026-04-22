@@ -105,7 +105,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	// Wait for the model to be loaded
 	fmt.Fprintf(cmd.ErrOrStderr(), "Waiting for model to load")
 	vllmURL := baseURL + "/v1"
-	if err := pod.WaitForModelReady(vllmURL, cfg.ModelName, llmAPIKey, upWaitTimeout, cmd.ErrOrStderr(), upWaitTick); err != nil {
+	if err := pod.WaitForModelReadyFunc(vllmURL, cfg.ModelName, llmAPIKey, upWaitTimeout, cmd.ErrOrStderr(), upWaitTick); err != nil {
 		// Log but don't fail - the pod is ready, model just taking longer to load
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
 	}

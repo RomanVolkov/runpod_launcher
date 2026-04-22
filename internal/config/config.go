@@ -27,6 +27,7 @@ type Config struct {
 	ModelName        string `toml:"model_name"`
 	PodName          string `toml:"pod_name"`
 	MaxModelLen      int    `toml:"max_model_len"`
+	OllamaContextLen int    `toml:"ollama_context_len"`
 	ToolCallParser   string `toml:"tool_call_parser"`
 	LastLLMAPIKey    string `toml:"last_llm_api_key"`
 

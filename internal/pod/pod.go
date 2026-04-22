@@ -137,6 +137,60 @@ const DefaultContainerDiskGB = 50
 // DefaultVolumeMountPath is the volume mount path used when config.VolumeMountPath is empty.
 const DefaultVolumeMountPath = "/workspace"
 
+// GetOllamaModelContext returns the maximum context window (in tokens) for a given Ollama model.
+// Uses a curated mapping of popular models to their official maximum context limits.
+// WARNING: Ensure your GPU has sufficient VRAM before using large context windows:
+// - < 24 GiB VRAM: stick to 4K-8K context
+// - 24-48 GiB VRAM: use up to 32K context
+// - >= 48 GiB VRAM: use 256K+ context without issues
+// Returns 0 if the model is not recognized.
+func GetOllamaModelContext(modelName string) (int, error) {
+	// Normalize to lowercase for comparison
+	lower := strings.ToLower(modelName)
+
+	// Strip any version tags for matching (e.g., "gemma4:31b" -> "gemma4")
+	baseName := lower
+	if idx := strings.Index(lower, ":"); idx != -1 {
+		baseName = lower[:idx]
+	}
+	// Normalize "llama3.1" to "llama31" for consistent matching
+	baseName = strings.ReplaceAll(baseName, ".", "")
+
+	// Model context window mappings based on official model specifications
+	modelContextMap := map[string]int{
+		// Gemma family
+		"gemma":      9216,     // Gemma 1 base ~9K
+		"gemma2":     9216,     // Gemma 2 ~9K
+		"gemma4":     262144,   // Gemma 4 31B ~262K (official max)
+
+		// Mistral family
+		"mistral":    32768,    // Mistral 7B ~32K
+		"mixtral":    32768,    // Mixtral 8x7B ~32K
+
+		// Llama family
+		"llama":      4096,     // Llama 2 ~4K
+		"llama2":     4096,     // Llama 2 ~4K
+		"llama3":     8192,     // Llama 3 ~8K
+		"llama31":    131072,   // Llama 3.1 ~128K
+
+		// Qwen family
+		"qwen":       32768,    // Qwen base ~32K
+
+		// Other popular models
+		"neural-chat": 4096,
+		"zephyr":      4096,
+		"openchat":    8192,
+		"starling":    4096,
+	}
+
+	if ctx, ok := modelContextMap[baseName]; ok {
+		return ctx, nil
+	}
+
+	// Model not in map - return 0 (caller will skip context setting)
+	return 0, nil
+}
+
 // StatusNotFound is the sentinel status emitted by the status command when no pod exists.
 // Note on status string conventions:
 //   - up/down commands emit synthetic CLI-friendly labels: "running" and "terminated".
@@ -161,6 +215,13 @@ type RunPodClient struct {
 	// Tests override this to point at a local httptest.Server.
 	baseURL string
 }
+
+// GetOllamaModelContextFunc is injected for testing; default calls GetOllamaModelContext.
+var GetOllamaModelContextFunc = GetOllamaModelContext
+
+// WaitForModelReadyFunc is injected for testing; default calls WaitForModelReady.
+// This allows tests to skip real network calls to the model API.
+var WaitForModelReadyFunc = WaitForModelReady
 
 // NewRunPodClient returns a new RunPodClient authenticated with the given API key.
 func NewRunPodClient(apiKey string) PodClient {
@@ -236,12 +297,39 @@ func (c *RunPodClient) CreatePod(cfg *config.Config, llmAPIKey string) (string, 
 		envVars = append(envVars, map[string]string{"key": k, "value": v})
 	}
 
-	// For Ollama, set OLLAMA_HOST to listen on all interfaces and the specified port
+	// For Ollama, set OLLAMA_HOST and auto-detect OLLAMA_NUM_CTX
 	if cfg.ImageName != "" && strings.Contains(strings.ToLower(cfg.ImageName), "ollama") {
 		envVars = append(envVars, map[string]string{
 			"key":   "OLLAMA_HOST",
 			"value": fmt.Sprintf("0.0.0.0:%d", DefaultServicePort),
 		})
+
+		// Determine context window: use config override if set, otherwise auto-detect
+		var numCtx int
+		if cfg.OllamaContextLen > 0 {
+			// Use explicit config override
+			numCtx = cfg.OllamaContextLen
+			fmt.Fprintf(os.Stderr, "Using Ollama context from config: %d tokens\n", numCtx)
+			envVars = append(envVars, map[string]string{
+				"key":   "OLLAMA_CONTEXT_LENGTH",
+				"value": fmt.Sprintf("%d", numCtx),
+			})
+		} else {
+			// Auto-detect context window from model mapping
+			fmt.Fprintf(os.Stderr, "Looking up context window for model: %s\n", cfg.ModelName)
+			detected, err := GetOllamaModelContextFunc(cfg.ModelName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not look up context window: %v\n", err)
+			} else if detected > 0 {
+				fmt.Fprintf(os.Stderr, "Auto-detected context window: %d tokens\n", detected)
+				envVars = append(envVars, map[string]string{
+					"key":   "OLLAMA_CONTEXT_LENGTH",
+					"value": fmt.Sprintf("%d", detected),
+				})
+			} else {
+				fmt.Fprintf(os.Stderr, "warning: model %q not recognized in context mapping - using Ollama default (2048 tokens)\n", cfg.ModelName)
+			}
+		}
 	}
 
 	imageName := cfg.ImageName

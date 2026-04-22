@@ -12,7 +12,7 @@ func TestUpdateConfigCreatesNewFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
 
-	err := UpdateConfig(configPath, "https://api.example.com/v1", "test-key")
+	err := UpdateConfig(configPath, "https://api.example.com/v1", "test-key", "")
 	if err != nil {
 		t.Fatalf("UpdateConfig failed: %v", err)
 	}
@@ -50,9 +50,9 @@ func TestUpdateConfigCreatesNewFile(t *testing.T) {
 		t.Errorf("baseURL mismatch: got %q, want %q", baseURL, "https://api.example.com/v1")
 	}
 
-	apiKey, ok := options["api_key"].(string)
+	apiKey, ok := options["apiKey"].(string)
 	if !ok || apiKey != "test-key" {
-		t.Errorf("api_key mismatch: got %q, want %q", apiKey, "test-key")
+		t.Errorf("apiKey mismatch: got %q, want %q", apiKey, "test-key")
 	}
 }
 
@@ -79,7 +79,7 @@ func TestUpdateConfigUpdatesExistingFile(t *testing.T) {
 	os.WriteFile(configPath, data, 0o644)
 
 	// Update the config
-	err := UpdateConfig(configPath, "https://new.example.com/v1", "new-key")
+	err := UpdateConfig(configPath, "https://new.example.com/v1", "new-key", "")
 	if err != nil {
 		t.Fatalf("UpdateConfig failed: %v", err)
 	}
@@ -105,9 +105,9 @@ func TestUpdateConfigUpdatesExistingFile(t *testing.T) {
 		t.Errorf("baseURL not updated: got %q", baseURL)
 	}
 
-	apiKey, _ := options["api_key"].(string)
+	apiKey, _ := options["apiKey"].(string)
 	if apiKey != "new-key" {
-		t.Errorf("api_key not updated: got %q", apiKey)
+		t.Errorf("apiKey not updated: got %q", apiKey)
 	}
 
 	// Verify other providers preserved
@@ -128,7 +128,7 @@ func TestUpdateConfigReturnsErrorForMissingParentDir(t *testing.T) {
 	// Use a path with a non-existent parent directory
 	configPath := filepath.Join(tmpDir, "nonexistent", "subdir", "config.json")
 
-	err := UpdateConfig(configPath, "https://api.example.com/v1", "test-key")
+	err := UpdateConfig(configPath, "https://api.example.com/v1", "test-key", "")
 	if err == nil {
 		t.Fatal("Expected error for missing parent directory, got nil")
 	}
@@ -138,7 +138,7 @@ func TestUpdateConfigWithJSONFormatting(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
 
-	err := UpdateConfig(configPath, "https://api.example.com/v1", "test-key")
+	err := UpdateConfig(configPath, "https://api.example.com/v1", "test-key", "")
 	if err != nil {
 		t.Fatalf("UpdateConfig failed: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestUpdateConfigAtomicWrite(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "config.json")
 
 	// Create initial file
-	err := UpdateConfig(configPath, "https://api.example.com/v1", "test-key")
+	err := UpdateConfig(configPath, "https://api.example.com/v1", "test-key", "")
 	if err != nil {
 		t.Fatalf("Initial UpdateConfig failed: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestUpdateConfigAtomicWrite(t *testing.T) {
 	originalData, _ := os.ReadFile(configPath)
 
 	// Update the config
-	err = UpdateConfig(configPath, "https://new.example.com/v1", "new-key")
+	err = UpdateConfig(configPath, "https://new.example.com/v1", "new-key", "")
 	if err != nil {
 		t.Fatalf("UpdateConfig failed: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestUpdateConfigCreatesNestedStructure(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
 
-	err := UpdateConfig(configPath, "https://api.example.com/v1", "test-key")
+	err := UpdateConfig(configPath, "https://api.example.com/v1", "test-key", "")
 	if err != nil {
 		t.Fatalf("UpdateConfig failed: %v", err)
 	}
@@ -230,8 +230,8 @@ func TestUpdateConfigCreatesNestedStructure(t *testing.T) {
 	if _, ok := options["baseURL"]; !ok {
 		t.Fatal("baseURL key not found under provider.runpod.options")
 	}
-	if _, ok := options["api_key"]; !ok {
-		t.Fatal("api_key key not found under provider.runpod.options")
+	if _, ok := options["apiKey"]; !ok {
+		t.Fatal("apiKey key not found under provider.runpod.options")
 	}
 }
 
@@ -250,7 +250,7 @@ func TestUpdateConfigExpandsTilde(t *testing.T) {
 	defer os.Remove(expandedPath)
 
 	// Call UpdateConfig with tilde path
-	err = UpdateConfig(tildePathWithFile, "https://api.example.com/v1", "test-key-tilde")
+	err = UpdateConfig(tildePathWithFile, "https://api.example.com/v1", "test-key-tilde", "")
 	if err != nil {
 		t.Fatalf("UpdateConfig with tilde path failed: %v", err)
 	}
@@ -288,9 +288,9 @@ func TestUpdateConfigExpandsTilde(t *testing.T) {
 		t.Errorf("baseURL mismatch: got %q, want %q", baseURL, "https://api.example.com/v1")
 	}
 
-	apiKey, ok := options["api_key"].(string)
+	apiKey, ok := options["apiKey"].(string)
 	if !ok || apiKey != "test-key-tilde" {
-		t.Errorf("api_key mismatch: got %q, want %q", apiKey, "test-key-tilde")
+		t.Errorf("apiKey mismatch: got %q, want %q", apiKey, "test-key-tilde")
 	}
 }
 
