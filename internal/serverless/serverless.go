@@ -31,7 +31,7 @@ type Endpoint struct {
 
 type Client interface {
 	FindEndpointByName(name string) (*Endpoint, error)
-	SaveTemplate(name, imageName, modelName, apiKey string) (string, error)
+	SaveTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error)
 	SaveEndpoint(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error)
 }
 
@@ -149,7 +149,7 @@ func (c *RunPodServerlessClient) FindEndpointByName(name string) (*Endpoint, err
 	return nil, nil
 }
 
-func (c *RunPodServerlessClient) SaveTemplate(name, imageName, modelName, apiKey string) (string, error) {
+func (c *RunPodServerlessClient) SaveTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) {
 	query := `
 		mutation SaveTemplate($input: SaveTemplateInput) {
 			saveTemplate(input: $input) {
@@ -160,9 +160,13 @@ func (c *RunPodServerlessClient) SaveTemplate(name, imageName, modelName, apiKey
 
 	variables := map[string]interface{}{
 		"input": map[string]interface{}{
-			"name":         name,
-			"imageName":    imageName,
-			"isServerless": true,
+			"name":               name,
+			"imageName":          imageName,
+			"isServerless":       true,
+			"containerDiskInGb":  containerDiskGB,
+			"volumeInGb":         0,
+			"dockerArgs":         "",
+			"ports":              "8000/http",
 			"env": []map[string]string{
 				{"key": "MODEL_NAME", "value": modelName},
 				{"key": "HF_TOKEN", "value": apiKey},

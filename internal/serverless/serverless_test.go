@@ -118,7 +118,7 @@ func TestRunPodServerlessClient_SaveTemplate_ReturnsID(t *testing.T) {
 	defer server.Close()
 
 	client := newTestServerlessClient(server.URL)
-	id, err := client.SaveTemplate("test-template", "runpod/worker-vllm:latest", "qwen/qwen3.6:27b", "test-key")
+	id, err := client.SaveTemplate("test-template", "runpod/worker-vllm:latest", "qwen/qwen3.6:27b", "test-key", 50)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestRunPodServerlessClient_SaveTemplate_SendsIsServerless(t *testing.T) {
 	defer server.Close()
 
 	client := newTestServerlessClient(server.URL)
-	_, _ = client.SaveTemplate("test", "image", "model", "key")
+	_, _ = client.SaveTemplate("test", "image", "model", "key", 50)
 
 	if !strings.Contains(capturedBody, "isServerless") {
 		t.Errorf("request body should contain 'isServerless': %s", capturedBody)
@@ -246,7 +246,7 @@ func TestRunPodServerlessClient_GraphQLError(t *testing.T) {
 	defer server.Close()
 
 	client := newTestServerlessClient(server.URL)
-	_, err := client.SaveTemplate("test", "image", "model", "key")
+	_, err := client.SaveTemplate("test", "image", "model", "key", 50)
 	if err == nil {
 		t.Fatal("expected error for GraphQL error response")
 	}
@@ -264,7 +264,7 @@ func TestRunPodServerlessClient_HTTPError(t *testing.T) {
 	defer server.Close()
 
 	client := newTestServerlessClient(server.URL)
-	_, err := client.SaveTemplate("test", "image", "model", "key")
+	_, err := client.SaveTemplate("test", "image", "model", "key", 50)
 	if err == nil {
 		t.Fatal("expected error for HTTP error response")
 	}

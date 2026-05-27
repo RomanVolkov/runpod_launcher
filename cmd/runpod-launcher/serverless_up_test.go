@@ -12,7 +12,7 @@ import (
 // mockServerlessClient implements serverless.Client for testing.
 type mockServerlessClient struct {
 	findEndpointFn   func(string) (*serverless.Endpoint, error)
-	saveTemplateFn   func(string, string, string, string) (string, error)
+	saveTemplateFn   func(string, string, string, string, int) (string, error)
 	saveEndpointFn   func(string, string, string, string, int, int, int, int, string) (string, error)
 }
 
@@ -23,9 +23,9 @@ func (m *mockServerlessClient) FindEndpointByName(name string) (*serverless.Endp
 	return nil, errors.New("findEndpointFn not set")
 }
 
-func (m *mockServerlessClient) SaveTemplate(name, imageName, modelName, apiKey string) (string, error) {
+func (m *mockServerlessClient) SaveTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) {
 	if m.saveTemplateFn != nil {
-		return m.saveTemplateFn(name, imageName, modelName, apiKey)
+		return m.saveTemplateFn(name, imageName, modelName, apiKey, containerDiskGB)
 	}
 	return "", errors.New("saveTemplateFn not set")
 }
@@ -72,7 +72,7 @@ func TestServerlessUp_JSONOutput_NewEndpoint(t *testing.T) {
 
 	mock := &mockServerlessClient{
 		findEndpointFn: func(name string) (*serverless.Endpoint, error) { return nil, nil },
-		saveTemplateFn: func(name, imageName, modelName, apiKey string) (string, error) { return "tpl-123", nil },
+		saveTemplateFn: func(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) { return "tpl-123", nil },
 		saveEndpointFn: func(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
 			return "ep-abc123", nil
 		},
@@ -129,7 +129,7 @@ func TestServerlessUp_PlainText_NewEndpoint(t *testing.T) {
 
 	mock := &mockServerlessClient{
 		findEndpointFn: func(name string) (*serverless.Endpoint, error) { return nil, nil },
-		saveTemplateFn: func(name, imageName, modelName, apiKey string) (string, error) { return "tpl-123", nil },
+		saveTemplateFn: func(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) { return "tpl-123", nil },
 		saveEndpointFn: func(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
 			return "ep-xyz", nil
 		},
@@ -180,7 +180,7 @@ func TestServerlessUp_SaveTemplateError(t *testing.T) {
 
 	mock := &mockServerlessClient{
 		findEndpointFn: func(name string) (*serverless.Endpoint, error) { return nil, nil },
-		saveTemplateFn: func(name, imageName, modelName, apiKey string) (string, error) {
+		saveTemplateFn: func(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) {
 			return "", errors.New("template creation failed")
 		},
 	}
@@ -203,7 +203,7 @@ func TestServerlessUp_SaveEndpointError(t *testing.T) {
 
 	mock := &mockServerlessClient{
 		findEndpointFn: func(name string) (*serverless.Endpoint, error) { return nil, nil },
-		saveTemplateFn: func(name, imageName, modelName, apiKey string) (string, error) { return "tpl-123", nil },
+		saveTemplateFn: func(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) { return "tpl-123", nil },
 		saveEndpointFn: func(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
 			return "", errors.New("endpoint creation failed")
 		},

@@ -60,7 +60,11 @@ func runServerlessUp(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create template
-	templateID, err := client.SaveTemplate(endpointName, imageName, cfg.ModelName, cfg.RunpodAPIKey)
+	diskGB := cfg.ContainerDiskGB
+	if diskGB == 0 {
+		diskGB = 50
+	}
+	templateID, err := client.SaveTemplate(endpointName, imageName, cfg.ModelName, cfg.RunpodAPIKey, diskGB)
 	if err != nil {
 		return fmt.Errorf("failed to create serverless template: %w", err)
 	}
