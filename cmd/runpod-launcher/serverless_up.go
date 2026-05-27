@@ -48,6 +48,12 @@ func runServerlessUp(cmd *cobra.Command, args []string) error {
 		workersMax = serverless.DefaultWorkersMax
 	}
 
+	// Determine model name: use ServerlessModelName if set, fallback to ModelName
+	modelName := cfg.ServerlessModelName
+	if modelName == "" {
+		modelName = cfg.ModelName
+	}
+
 	client := newServerlessClient(cfg.RunpodAPIKey)
 
 	// Check if endpoint already exists
@@ -63,10 +69,6 @@ func runServerlessUp(cmd *cobra.Command, args []string) error {
 	diskGB := cfg.ContainerDiskGB
 	if diskGB == 0 {
 		diskGB = 50
-	}
-	modelName := cfg.ServerlessModelName
-	if modelName == "" {
-		modelName = cfg.ModelName
 	}
 	templateID, err := client.CreateTemplate(endpointName, imageName, modelName, cfg.RunpodAPIKey, diskGB)
 	if err != nil {
@@ -108,7 +110,11 @@ func printServerlessUpResult(cmd *cobra.Command, asJSON bool, endpointID string,
 
 	openCodeUpdated := false
 	if openCodePath != "" {
-		if err := updateServerlessOpenCodeConfig(openCodePath, url, cfg.RunpodAPIKey, cfg.ModelName, "runpod-serverless"); err != nil {
+		modelName := cfg.ServerlessModelName
+		if modelName == "" {
+			modelName = cfg.ModelName
+		}
+		if err := updateServerlessOpenCodeConfig(openCodePath, url, cfg.RunpodAPIKey, modelName, "runpod-serverless"); err != nil {
 			return fmt.Errorf("failed to update OpenCode config: %w", err)
 		}
 		openCodeUpdated = true
