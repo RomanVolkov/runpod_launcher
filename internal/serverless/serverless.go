@@ -123,21 +123,35 @@ func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiK
 	}
 
 	if existing != nil {
-		// Template exists; check if it has the correct MODEL_NAME
+		// Template exists; check if it has the correct image and MODEL_NAME
+		matchesImage := false
+		matchesModel := false
+
+		if imgRaw, ok := (*existing)["imageName"]; ok {
+			var currentImage string
+			if err := json.Unmarshal(imgRaw, &currentImage); err == nil {
+				matchesImage = currentImage == imageName
+			}
+		}
+
 		if envRaw, ok := (*existing)["env"]; ok {
 			var envMap map[string]string
 			if err := json.Unmarshal(envRaw, &envMap); err == nil {
-				if currentModel, hasModel := envMap["MODEL_NAME"]; hasModel && currentModel == modelName {
-					// Template already has the correct MODEL_NAME; reuse it
-					var id string
-					if err := json.Unmarshal((*existing)["id"], &id); err == nil {
-						return id, nil
-					}
+				if currentModel, hasModel := envMap["MODEL_NAME"]; hasModel {
+					matchesModel = currentModel == modelName
 				}
 			}
 		}
 
-		// Template exists but has wrong MODEL_NAME; delete and recreate
+		if matchesImage && matchesModel {
+			// Template already has correct image and MODEL_NAME; reuse it
+			var id string
+			if err := json.Unmarshal((*existing)["id"], &id); err == nil {
+				return id, nil
+			}
+		}
+
+		// Template exists but has wrong image or MODEL_NAME; delete and recreate
 		var id string
 		if err := json.Unmarshal((*existing)["id"], &id); err == nil {
 			_, _ = RunpodCtlFn(c.apiKey, "template", "delete", id)
