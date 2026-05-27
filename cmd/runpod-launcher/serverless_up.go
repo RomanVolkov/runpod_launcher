@@ -72,7 +72,7 @@ func runServerlessUp(cmd *cobra.Command, args []string) error {
 	// Create endpoint
 	gpuTypeID := cfg.ServerlessGPUTypeID
 	if gpuTypeID == "" {
-		gpuTypeID = "ADA_LOVELACE_24"
+		gpuTypeID = "NVIDIA A100-SXM4-80GB"
 	}
 	endpointID, err := client.CreateEndpoint(
 		endpointName,

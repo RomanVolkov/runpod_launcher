@@ -80,10 +80,10 @@ serverless_endpoint_name = ""
 # Only used by 'serverless up' command
 serverless_workers_max = 0
 
-# GPU type for serverless endpoint (default: ADA_LOVELACE_24)
+# GPU type for serverless endpoint (default: NVIDIA A100-SXM4-80GB)
 # Must be compatible with CUDA 12.1 — RTX 5090 (Blackwell) is NOT compatible
 # Use 'runpod-launcher availability' to see GPU IDs and pricing
-# serverless_gpu_type_id = "ADA_LOVELACE_24"
+# serverless_gpu_type_id = "NVIDIA A100-SXM4-80GB"
 
 # Optional extra environment variables to inject into the pod
 # [env_vars]
