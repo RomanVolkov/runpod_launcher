@@ -12,8 +12,10 @@ import (
 // mockServerlessClient implements serverless.Client for testing.
 type mockServerlessClient struct {
 	findEndpointFn   func(string) (*serverless.Endpoint, error)
-	saveTemplateFn   func(string, string, string, string, int) (string, error)
-	saveEndpointFn   func(string, string, string, string, int, int, int, int, string) (string, error)
+	createTemplateFn func(string, string, string, string, int) (string, error)
+	createEndpointFn func(string, string, string, int, int, int, string) (string, error)
+	scaleToZeroFn    func(string) error
+	deleteEndpointFn func(string) error
 }
 
 func (m *mockServerlessClient) FindEndpointByName(name string) (*serverless.Endpoint, error) {
@@ -23,18 +25,32 @@ func (m *mockServerlessClient) FindEndpointByName(name string) (*serverless.Endp
 	return nil, errors.New("findEndpointFn not set")
 }
 
-func (m *mockServerlessClient) SaveTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) {
-	if m.saveTemplateFn != nil {
-		return m.saveTemplateFn(name, imageName, modelName, apiKey, containerDiskGB)
+func (m *mockServerlessClient) CreateTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) {
+	if m.createTemplateFn != nil {
+		return m.createTemplateFn(name, imageName, modelName, apiKey, containerDiskGB)
 	}
-	return "", errors.New("saveTemplateFn not set")
+	return "", errors.New("createTemplateFn not set")
 }
 
-func (m *mockServerlessClient) SaveEndpoint(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
-	if m.saveEndpointFn != nil {
-		return m.saveEndpointFn(endpointID, name, gpuIDs, templateID, workersMin, workersMax, idleTimeout, scalerValue, scalerType)
+func (m *mockServerlessClient) CreateEndpoint(name, gpuID, templateID string, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
+	if m.createEndpointFn != nil {
+		return m.createEndpointFn(name, gpuID, templateID, workersMax, idleTimeout, scalerValue, scalerType)
 	}
-	return "", errors.New("saveEndpointFn not set")
+	return "", errors.New("createEndpointFn not set")
+}
+
+func (m *mockServerlessClient) ScaleToZero(endpointID string) error {
+	if m.scaleToZeroFn != nil {
+		return m.scaleToZeroFn(endpointID)
+	}
+	return errors.New("scaleToZeroFn not set")
+}
+
+func (m *mockServerlessClient) DeleteEndpoint(endpointID string) error {
+	if m.deleteEndpointFn != nil {
+		return m.deleteEndpointFn(endpointID)
+	}
+	return errors.New("deleteEndpointFn not set")
 }
 
 // executeServerlessUpDirect calls runServerlessUp directly, setting package-level flags before the call.
@@ -71,9 +87,9 @@ func TestServerlessUp_JSONOutput_NewEndpoint(t *testing.T) {
 	configPath := writeTestConfig(t, testConfig)
 
 	mock := &mockServerlessClient{
-		findEndpointFn: func(name string) (*serverless.Endpoint, error) { return nil, nil },
-		saveTemplateFn: func(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) { return "tpl-123", nil },
-		saveEndpointFn: func(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
+		findEndpointFn:   func(name string) (*serverless.Endpoint, error) { return nil, nil },
+		createTemplateFn: func(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) { return "tpl-123", nil },
+		createEndpointFn: func(name, gpuID, templateID string, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
 			return "ep-abc123", nil
 		},
 	}
@@ -128,9 +144,9 @@ func TestServerlessUp_PlainText_NewEndpoint(t *testing.T) {
 	configPath := writeTestConfig(t, testConfig)
 
 	mock := &mockServerlessClient{
-		findEndpointFn: func(name string) (*serverless.Endpoint, error) { return nil, nil },
-		saveTemplateFn: func(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) { return "tpl-123", nil },
-		saveEndpointFn: func(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
+		findEndpointFn:   func(name string) (*serverless.Endpoint, error) { return nil, nil },
+		createTemplateFn: func(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) { return "tpl-123", nil },
+		createEndpointFn: func(name, gpuID, templateID string, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
 			return "ep-xyz", nil
 		},
 	}
@@ -175,12 +191,12 @@ func TestServerlessUp_PlainText_AlreadyExists(t *testing.T) {
 	}
 }
 
-func TestServerlessUp_SaveTemplateError(t *testing.T) {
+func TestServerlessUp_CreateTemplateError(t *testing.T) {
 	configPath := writeTestConfig(t, testConfig)
 
 	mock := &mockServerlessClient{
 		findEndpointFn: func(name string) (*serverless.Endpoint, error) { return nil, nil },
-		saveTemplateFn: func(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) {
+		createTemplateFn: func(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) {
 			return "", errors.New("template creation failed")
 		},
 	}
@@ -191,20 +207,20 @@ func TestServerlessUp_SaveTemplateError(t *testing.T) {
 
 	_, err := executeServerlessUpDirect(t, configPath, false)
 	if err == nil {
-		t.Fatal("expected error from SaveTemplate")
+		t.Fatal("expected error from CreateTemplate")
 	}
 	if !strings.Contains(err.Error(), "template") {
 		t.Errorf("error should mention template: %v", err)
 	}
 }
 
-func TestServerlessUp_SaveEndpointError(t *testing.T) {
+func TestServerlessUp_CreateEndpointError(t *testing.T) {
 	configPath := writeTestConfig(t, testConfig)
 
 	mock := &mockServerlessClient{
-		findEndpointFn: func(name string) (*serverless.Endpoint, error) { return nil, nil },
-		saveTemplateFn: func(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) { return "tpl-123", nil },
-		saveEndpointFn: func(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
+		findEndpointFn:   func(name string) (*serverless.Endpoint, error) { return nil, nil },
+		createTemplateFn: func(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) { return "tpl-123", nil },
+		createEndpointFn: func(name, gpuID, templateID string, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
 			return "", errors.New("endpoint creation failed")
 		},
 	}
@@ -215,7 +231,7 @@ func TestServerlessUp_SaveEndpointError(t *testing.T) {
 
 	_, err := executeServerlessUpDirect(t, configPath, false)
 	if err == nil {
-		t.Fatal("expected error from SaveEndpoint")
+		t.Fatal("expected error from CreateEndpoint")
 	}
 	if !strings.Contains(err.Error(), "endpoint") {
 		t.Errorf("error should mention endpoint: %v", err)

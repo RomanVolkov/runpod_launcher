@@ -10,4 +10,5 @@ var serverlessCmd = &cobra.Command{
 func init() {
 	serverlessCmd.AddCommand(serverlessUpCmd)
 	serverlessCmd.AddCommand(serverlessDownCmd)
+	serverlessCmd.AddCommand(serverlessDestroyCmd)
 }

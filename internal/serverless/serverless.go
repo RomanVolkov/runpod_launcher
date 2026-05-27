@@ -1,15 +1,11 @@
 package serverless
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"time"
+	"os"
+	"os/exec"
 )
-
-const runpodGraphQLEndpoint = "https://api.runpod.io/graphql"
 
 const (
 	DefaultEndpointName = "llm-launcher-serverless"
@@ -31,227 +27,184 @@ type Endpoint struct {
 
 type Client interface {
 	FindEndpointByName(name string) (*Endpoint, error)
-	SaveTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error)
-	SaveEndpoint(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error)
+	CreateTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error)
+	CreateEndpoint(name, gpuID, templateID string, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error)
+	ScaleToZero(endpointID string) error
+	DeleteEndpoint(endpointID string) error
+}
+
+// RunpodCtlFn is the function used to call runpodctl. Tests override this.
+var RunpodCtlFn = func(apiKey string, args ...string) ([]byte, error) {
+	cmd := exec.Command("runpodctl", args...)
+	cmd.Env = append(os.Environ(), "RUNPOD_API_KEY="+apiKey)
+	return cmd.CombinedOutput()
 }
 
 type RunPodServerlessClient struct {
-	apiKey     string
-	httpClient *http.Client
-	BaseURL    string
+	apiKey string
 }
 
 func NewRunPodServerlessClient(apiKey string) Client {
-	return &RunPodServerlessClient{
-		apiKey:     apiKey,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		BaseURL:    runpodGraphQLEndpoint,
-	}
-}
-
-func (c *RunPodServerlessClient) graphqlRequest(query string, variables map[string]interface{}) (map[string]interface{}, error) {
-	payload := map[string]interface{}{
-		"query":     query,
-		"variables": variables,
-	}
-
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", c.BaseURL, bytes.NewReader(payloadBytes))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("graphql request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result map[string]interface{}
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	if errs, ok := result["errors"].([]interface{}); ok && len(errs) > 0 {
-		return nil, fmt.Errorf("graphql error: %v", errs[0])
-	}
-
-	return result, nil
+	return &RunPodServerlessClient{apiKey: apiKey}
 }
 
 func (c *RunPodServerlessClient) FindEndpointByName(name string) (*Endpoint, error) {
-	query := `
-		query ListEndpoints {
-			myself {
-				endpoints {
-					id
-					name
-					workersMin
-					workersMax
-				}
-			}
-		}
-	`
-
-	result, err := c.graphqlRequest(query, map[string]interface{}{})
+	out, err := RunpodCtlFn(c.apiKey, "serverless", "list")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("runpodctl serverless list: %w", err)
 	}
 
-	data, ok := result["data"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid response structure: no 'data' field")
-	}
-
-	myself, ok := data["myself"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid response structure: no 'myself' field")
-	}
-
-	endpoints, ok := myself["endpoints"].([]interface{})
-	if !ok {
-		return nil, nil
+	var endpoints []map[string]json.RawMessage
+	if err := json.Unmarshal(out, &endpoints); err != nil {
+		return nil, fmt.Errorf("failed to parse serverless list output: %w\n%s", err, out)
 	}
 
 	for _, ep := range endpoints {
-		epMap, ok := ep.(map[string]interface{})
-		if !ok {
+		var epName string
+		if err := json.Unmarshal(ep["name"], &epName); err != nil {
 			continue
 		}
-
-		if stringField(epMap, "name") == name {
-			return &Endpoint{
-				ID:         stringField(epMap, "id"),
-				Name:       stringField(epMap, "name"),
-				WorkersMin: intField(epMap, "workersMin"),
-				WorkersMax: intField(epMap, "workersMax"),
-			}, nil
+		if epName != name {
+			continue
 		}
+		var id string
+		if err := json.Unmarshal(ep["id"], &id); err != nil {
+			continue
+		}
+		result := &Endpoint{ID: id, Name: epName}
+		if raw, ok := ep["workersMin"]; ok {
+			var v int
+			if err := json.Unmarshal(raw, &v); err == nil {
+				result.WorkersMin = v
+			}
+		}
+		if raw, ok := ep["workersMax"]; ok {
+			var v int
+			if err := json.Unmarshal(raw, &v); err == nil {
+				result.WorkersMax = v
+			}
+		}
+		return result, nil
 	}
 
 	return nil, nil
 }
 
-func (c *RunPodServerlessClient) SaveTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) {
-	query := `
-		mutation SaveTemplate($input: SaveTemplateInput) {
-			saveTemplate(input: $input) {
-				id
-			}
-		}
-	`
-
-	variables := map[string]interface{}{
-		"input": map[string]interface{}{
-			"name":               name,
-			"imageName":          imageName,
-			"isServerless":       true,
-			"containerDiskInGb":  containerDiskGB,
-			"volumeInGb":         0,
-			"dockerArgs":         "",
-			"ports":              "8000/http",
-			"env": []map[string]string{
-				{"key": "MODEL_NAME", "value": modelName},
-				{"key": "HF_TOKEN", "value": apiKey},
-			},
-		},
-	}
-
-	result, err := c.graphqlRequest(query, variables)
+func (c *RunPodServerlessClient) findTemplateByName(name string) (string, error) {
+	out, err := RunpodCtlFn(c.apiKey, "template", "list", "--type", "user")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("runpodctl template list: %w\n%s", err, out)
 	}
 
-	data, ok := result["data"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("invalid response structure: no 'data' field")
+	var templates []map[string]json.RawMessage
+	if err := json.Unmarshal(out, &templates); err != nil {
+		return "", fmt.Errorf("failed to parse template list output: %w\n%s", err, out)
 	}
 
-	saveTemplate, ok := data["saveTemplate"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("invalid response structure: no 'saveTemplate' field")
-	}
-
-	return stringField(saveTemplate, "id"), nil
-}
-
-func (c *RunPodServerlessClient) SaveEndpoint(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
-	query := `
-		mutation SaveEndpoint($input: EndpointInput) {
-			saveEndpoint(input: $input) {
-				id
-				name
-			}
+	for _, tpl := range templates {
+		var tplName string
+		if err := json.Unmarshal(tpl["name"], &tplName); err != nil {
+			continue
 		}
-	`
-
-	input := map[string]interface{}{
-		"name":        name,
-		"gpuIds":      gpuIDs,
-		"templateId":  templateID,
-		"workersMin":  workersMin,
-		"workersMax":  workersMax,
-		"idleTimeout": idleTimeout,
-		"scalerType":  scalerType,
-		"scalerValue": scalerValue,
-		"flashboot":   true,
+		if tplName != name {
+			continue
+		}
+		var id string
+		if err := json.Unmarshal(tpl["id"], &id); err != nil {
+			continue
+		}
+		return id, nil
 	}
 
-	if endpointID != "" {
-		input["id"] = endpointID
+	return "", nil
+}
+
+func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) {
+	if existing, err := c.findTemplateByName(name); err == nil && existing != "" {
+		return existing, nil
 	}
 
-	variables := map[string]interface{}{
-		"input": input,
-	}
-
-	result, err := c.graphqlRequest(query, variables)
+	envJSON, err := json.Marshal(map[string]string{
+		"MODEL_NAME": modelName,
+		"HF_TOKEN":   apiKey,
+	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal env vars: %w", err)
 	}
 
-	data, ok := result["data"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("invalid response structure: no 'data' field")
+	out, err := RunpodCtlFn(c.apiKey,
+		"template", "create",
+		"--name", name,
+		"--image", imageName,
+		"--serverless",
+		"--container-disk-in-gb", fmt.Sprintf("%d", containerDiskGB),
+		"--ports", "8000/http",
+		"--env", string(envJSON),
+	)
+	if err != nil {
+		return "", fmt.Errorf("runpodctl template create: %w\n%s", err, out)
 	}
 
-	saveEndpoint, ok := data["saveEndpoint"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("invalid response structure: no 'saveEndpoint' field")
-	}
-
-	return stringField(saveEndpoint, "id"), nil
+	return parseID(out)
 }
 
-func stringField(m map[string]interface{}, key string) string {
-	v, _ := m[key].(string)
-	return v
+func (c *RunPodServerlessClient) CreateEndpoint(name, gpuID, templateID string, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
+	scaleBy := "delay"
+	if scalerType == "REQUEST_COUNT" {
+		scaleBy = "requests"
+	}
+
+	out, err := RunpodCtlFn(c.apiKey,
+		"serverless", "create",
+		"--name", name,
+		"--template-id", templateID,
+		"--gpu-id", gpuID,
+		"--workers-min", "0",
+		"--workers-max", fmt.Sprintf("%d", workersMax),
+		"--idle-timeout", fmt.Sprintf("%d", idleTimeout),
+		"--scale-by", scaleBy,
+		"--scale-threshold", fmt.Sprintf("%d", scalerValue),
+		"--flash-boot",
+	)
+	if err != nil {
+		return "", fmt.Errorf("runpodctl serverless create: %w\n%s", err, out)
+	}
+
+	return parseID(out)
 }
 
-func intField(m map[string]interface{}, key string) int {
-	switch v := m[key].(type) {
-	case float64:
-		return int(v)
-	case int:
-		return v
-	default:
-		return 0
+func (c *RunPodServerlessClient) ScaleToZero(endpointID string) error {
+	out, err := RunpodCtlFn(c.apiKey,
+		"serverless", "update", endpointID,
+		"--workers-min", "0",
+		"--workers-max", "0",
+	)
+	if err != nil {
+		return fmt.Errorf("runpodctl serverless update: %w\n%s", err, out)
 	}
+	return nil
+}
+
+func (c *RunPodServerlessClient) DeleteEndpoint(endpointID string) error {
+	out, err := RunpodCtlFn(c.apiKey, "serverless", "delete", endpointID)
+	if err != nil {
+		return fmt.Errorf("runpodctl serverless delete: %w\n%s", err, out)
+	}
+	return nil
+}
+
+func parseID(out []byte) (string, error) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(out, &obj); err != nil {
+		return "", fmt.Errorf("failed to parse CLI output: %w\n%s", err, out)
+	}
+	raw, ok := obj["id"]
+	if !ok {
+		return "", fmt.Errorf("no 'id' field in CLI output: %s", out)
+	}
+	var id string
+	if err := json.Unmarshal(raw, &id); err != nil {
+		return "", fmt.Errorf("failed to parse 'id' field: %w", err)
+	}
+	return id, nil
 }

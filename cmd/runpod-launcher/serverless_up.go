@@ -64,18 +64,20 @@ func runServerlessUp(cmd *cobra.Command, args []string) error {
 	if diskGB == 0 {
 		diskGB = 50
 	}
-	templateID, err := client.SaveTemplate(endpointName, imageName, cfg.ModelName, cfg.RunpodAPIKey, diskGB)
+	templateID, err := client.CreateTemplate(endpointName, imageName, cfg.ModelName, cfg.RunpodAPIKey, diskGB)
 	if err != nil {
 		return fmt.Errorf("failed to create serverless template: %w", err)
 	}
 
 	// Create endpoint
-	endpointID, err := client.SaveEndpoint(
-		"",          // endpointID (empty for new)
+	gpuTypeID := cfg.ServerlessGPUTypeID
+	if gpuTypeID == "" {
+		gpuTypeID = "ADA_LOVELACE_24"
+	}
+	endpointID, err := client.CreateEndpoint(
 		endpointName,
-		cfg.GPUTypeID,
+		gpuTypeID,
 		templateID,
-		0,                              // workersMin
 		workersMax,
 		serverless.DefaultIdleTimeout,
 		serverless.DefaultScalerValue,

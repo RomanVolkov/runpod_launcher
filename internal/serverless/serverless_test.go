@@ -2,74 +2,57 @@ package serverless_test
 
 import (
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/romanvolkov/runpod-launcher/internal/serverless"
 )
 
-func newTestServerlessClient(serverURL string) *serverless.RunPodServerlessClient {
-	client := serverless.NewRunPodServerlessClient("test-api-key").(*serverless.RunPodServerlessClient)
-	client.BaseURL = serverURL
-	return client
+func withMockCLI(t *testing.T, fn func(apiKey string, args ...string) ([]byte, error)) {
+	t.Helper()
+	orig := serverless.RunpodCtlFn
+	t.Cleanup(func() { serverless.RunpodCtlFn = orig })
+	serverless.RunpodCtlFn = fn
 }
 
-func TestRunPodServerlessClient_FindEndpointByName_ReturnsMatch(t *testing.T) {
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		result := map[string]interface{}{
-			"data": map[string]interface{}{
-				"myself": map[string]interface{}{
-					"endpoints": []map[string]interface{}{
-						{
-							"id":         "ep-123",
-							"name":       "test-endpoint",
-							"workersMin": float64(0),
-							"workersMax": float64(3),
-						},
-					},
-				},
-			},
-		}
-		json.NewEncoder(w).Encode(result)
-	}
-	server := httptest.NewServer(http.HandlerFunc(handler))
-	defer server.Close()
+func newTestClient() serverless.Client {
+	return serverless.NewRunPodServerlessClient("test-api-key")
+}
 
-	client := newTestServerlessClient(server.URL)
+func TestFindEndpointByName_ReturnsMatch(t *testing.T) {
+	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
+		out, _ := json.Marshal([]map[string]interface{}{
+			{"id": "ep-123", "name": "test-endpoint", "workersMin": 0, "workersMax": 3},
+		})
+		return out, nil
+	})
+
+	client := newTestClient()
 	ep, err := client.FindEndpointByName("test-endpoint")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if ep == nil {
-		t.Fatalf("expected endpoint, got nil")
+		t.Fatal("expected endpoint, got nil")
 	}
 	if ep.ID != "ep-123" || ep.Name != "test-endpoint" {
 		t.Errorf("endpoint mismatch: got %+v", ep)
 	}
+	if ep.WorkersMax != 3 {
+		t.Errorf("workersMax: got %d, want 3", ep.WorkersMax)
+	}
 }
 
-func TestRunPodServerlessClient_FindEndpointByName_ReturnsNilWhenNotFound(t *testing.T) {
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		result := map[string]interface{}{
-			"data": map[string]interface{}{
-				"myself": map[string]interface{}{
-					"endpoints": []map[string]interface{}{
-						{
-							"id":   "ep-999",
-							"name": "other-endpoint",
-						},
-					},
-				},
-			},
-		}
-		json.NewEncoder(w).Encode(result)
-	}
-	server := httptest.NewServer(http.HandlerFunc(handler))
-	defer server.Close()
+func TestFindEndpointByName_ReturnsNilWhenNotFound(t *testing.T) {
+	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
+		out, _ := json.Marshal([]map[string]interface{}{
+			{"id": "ep-999", "name": "other-endpoint"},
+		})
+		return out, nil
+	})
 
-	client := newTestServerlessClient(server.URL)
+	client := newTestClient()
 	ep, err := client.FindEndpointByName("nonexistent")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -79,21 +62,12 @@ func TestRunPodServerlessClient_FindEndpointByName_ReturnsNilWhenNotFound(t *tes
 	}
 }
 
-func TestRunPodServerlessClient_FindEndpointByName_NullEndpoints(t *testing.T) {
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		result := map[string]interface{}{
-			"data": map[string]interface{}{
-				"myself": map[string]interface{}{
-					"endpoints": nil,
-				},
-			},
-		}
-		json.NewEncoder(w).Encode(result)
-	}
-	server := httptest.NewServer(http.HandlerFunc(handler))
-	defer server.Close()
+func TestFindEndpointByName_EmptyList(t *testing.T) {
+	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
+		return []byte("[]"), nil
+	})
 
-	client := newTestServerlessClient(server.URL)
+	client := newTestClient()
 	ep, err := client.FindEndpointByName("any")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -103,22 +77,14 @@ func TestRunPodServerlessClient_FindEndpointByName_NullEndpoints(t *testing.T) {
 	}
 }
 
-func TestRunPodServerlessClient_SaveTemplate_ReturnsID(t *testing.T) {
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		result := map[string]interface{}{
-			"data": map[string]interface{}{
-				"saveTemplate": map[string]interface{}{
-					"id": "tpl-abc123",
-				},
-			},
-		}
-		json.NewEncoder(w).Encode(result)
-	}
-	server := httptest.NewServer(http.HandlerFunc(handler))
-	defer server.Close()
+func TestCreateTemplate_ReturnsID(t *testing.T) {
+	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
+		out, _ := json.Marshal(map[string]interface{}{"id": "tpl-abc123", "name": "test"})
+		return out, nil
+	})
 
-	client := newTestServerlessClient(server.URL)
-	id, err := client.SaveTemplate("test-template", "runpod/worker-vllm:latest", "qwen/qwen3.6:27b", "test-key", 50)
+	client := newTestClient()
+	id, err := client.CreateTemplate("test", "runpod/worker-vllm:latest", "meta/llama3:8b", "hf-key", 50)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -127,50 +93,37 @@ func TestRunPodServerlessClient_SaveTemplate_ReturnsID(t *testing.T) {
 	}
 }
 
-func TestRunPodServerlessClient_SaveTemplate_SendsIsServerless(t *testing.T) {
-	var capturedBody string
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		buf := make([]byte, 1024)
-		n, _ := r.Body.Read(buf)
-		capturedBody = string(buf[:n])
+func TestCreateTemplate_ArgsContainServerless(t *testing.T) {
+	var capturedArgs []string
+	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
+		capturedArgs = args
+		out, _ := json.Marshal(map[string]interface{}{"id": "tpl-123"})
+		return out, nil
+	})
 
-		result := map[string]interface{}{
-			"data": map[string]interface{}{
-				"saveTemplate": map[string]interface{}{
-					"id": "tpl-123",
-				},
-			},
+	client := newTestClient()
+	_, _ = client.CreateTemplate("test", "image", "model", "key", 50)
+
+	found := false
+	for _, a := range capturedArgs {
+		if a == "--serverless" {
+			found = true
+			break
 		}
-		json.NewEncoder(w).Encode(result)
 	}
-	server := httptest.NewServer(http.HandlerFunc(handler))
-	defer server.Close()
-
-	client := newTestServerlessClient(server.URL)
-	_, _ = client.SaveTemplate("test", "image", "model", "key", 50)
-
-	if !strings.Contains(capturedBody, "isServerless") {
-		t.Errorf("request body should contain 'isServerless': %s", capturedBody)
+	if !found {
+		t.Errorf("args should contain '--serverless': %v", capturedArgs)
 	}
 }
 
-func TestRunPodServerlessClient_SaveEndpoint_ReturnsID(t *testing.T) {
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		result := map[string]interface{}{
-			"data": map[string]interface{}{
-				"saveEndpoint": map[string]interface{}{
-					"id":   "ep-xyz789",
-					"name": "test-endpoint",
-				},
-			},
-		}
-		json.NewEncoder(w).Encode(result)
-	}
-	server := httptest.NewServer(http.HandlerFunc(handler))
-	defer server.Close()
+func TestCreateEndpoint_ReturnsID(t *testing.T) {
+	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
+		out, _ := json.Marshal(map[string]interface{}{"id": "ep-xyz789", "name": "test"})
+		return out, nil
+	})
 
-	client := newTestServerlessClient(server.URL)
-	id, err := client.SaveEndpoint("", "test-endpoint", "AMPERE_16", "tpl-123", 0, 3, 5, 4, "QUEUE_DELAY")
+	client := newTestClient()
+	id, err := client.CreateEndpoint("test-endpoint", "AMPERE_16", "tpl-123", 3, 5, 4, "QUEUE_DELAY")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -179,96 +132,82 @@ func TestRunPodServerlessClient_SaveEndpoint_ReturnsID(t *testing.T) {
 	}
 }
 
-func TestRunPodServerlessClient_SaveEndpoint_SendsFlashboot(t *testing.T) {
-	var capturedBody string
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		buf := make([]byte, 1024)
-		n, _ := r.Body.Read(buf)
-		capturedBody = string(buf[:n])
+func TestCreateEndpoint_ArgsContainFlashBoot(t *testing.T) {
+	var capturedArgs []string
+	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
+		capturedArgs = args
+		out, _ := json.Marshal(map[string]interface{}{"id": "ep-123"})
+		return out, nil
+	})
 
-		result := map[string]interface{}{
-			"data": map[string]interface{}{
-				"saveEndpoint": map[string]interface{}{
-					"id": "ep-123",
-				},
-			},
+	client := newTestClient()
+	_, _ = client.CreateEndpoint("test", "GPU_ID", "tpl-123", 3, 5, 4, "QUEUE_DELAY")
+
+	found := false
+	for _, a := range capturedArgs {
+		if a == "--flash-boot" {
+			found = true
+			break
 		}
-		json.NewEncoder(w).Encode(result)
 	}
-	server := httptest.NewServer(http.HandlerFunc(handler))
-	defer server.Close()
-
-	client := newTestServerlessClient(server.URL)
-	_, _ = client.SaveEndpoint("", "test", "GPU_ID", "tpl-123", 0, 3, 5, 4, "QUEUE_DELAY")
-
-	if !strings.Contains(capturedBody, "flashboot") {
-		t.Errorf("request body should contain 'flashboot': %s", capturedBody)
+	if !found {
+		t.Errorf("args should contain '--flash-boot': %v", capturedArgs)
 	}
 }
 
-func TestRunPodServerlessClient_SaveEndpoint_IncludesIdWhenNonEmpty(t *testing.T) {
-	var capturedBody string
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		buf := make([]byte, 1024)
-		n, _ := r.Body.Read(buf)
-		capturedBody = string(buf[:n])
+func TestScaleToZero_ArgsContainWorkersZero(t *testing.T) {
+	var capturedArgs []string
+	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
+		capturedArgs = args
+		out, _ := json.Marshal(map[string]interface{}{"id": "ep-abc"})
+		return out, nil
+	})
 
-		result := map[string]interface{}{
-			"data": map[string]interface{}{
-				"saveEndpoint": map[string]interface{}{
-					"id": "ep-456",
-				},
-			},
-		}
-		json.NewEncoder(w).Encode(result)
+	client := newTestClient()
+	err := client.ScaleToZero("ep-abc")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	server := httptest.NewServer(http.HandlerFunc(handler))
-	defer server.Close()
 
-	client := newTestServerlessClient(server.URL)
-	_, _ = client.SaveEndpoint("ep-existing", "test", "GPU_ID", "tpl-123", 0, 3, 5, 4, "QUEUE_DELAY")
-
-	if !strings.Contains(capturedBody, "ep-existing") {
-		t.Errorf("request body should contain endpoint ID when provided: %s", capturedBody)
+	joined := strings.Join(capturedArgs, " ")
+	if !strings.Contains(joined, "ep-abc") {
+		t.Errorf("args should contain endpoint id: %v", capturedArgs)
+	}
+	if !strings.Contains(joined, "--workers-max 0") {
+		t.Errorf("args should contain '--workers-max 0': %v", capturedArgs)
 	}
 }
 
-func TestRunPodServerlessClient_GraphQLError(t *testing.T) {
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		result := map[string]interface{}{
-			"errors": []map[string]string{
-				{"message": "unauthorized"},
-			},
-		}
-		json.NewEncoder(w).Encode(result)
-	}
-	server := httptest.NewServer(http.HandlerFunc(handler))
-	defer server.Close()
+func TestDeleteEndpoint_ArgsContainDelete(t *testing.T) {
+	var capturedArgs []string
+	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
+		capturedArgs = args
+		return []byte("{}"), nil
+	})
 
-	client := newTestServerlessClient(server.URL)
-	_, err := client.SaveTemplate("test", "image", "model", "key", 50)
+	client := newTestClient()
+	err := client.DeleteEndpoint("ep-del123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	joined := strings.Join(capturedArgs, " ")
+	if !strings.Contains(joined, "serverless delete") {
+		t.Errorf("args should contain 'serverless delete': %v", capturedArgs)
+	}
+	if !strings.Contains(joined, "ep-del123") {
+		t.Errorf("args should contain endpoint id: %v", capturedArgs)
+	}
+}
+
+func TestCLIError_SurfacesAsError(t *testing.T) {
+	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
+		return nil, errors.New("exit status 1")
+	})
+
+	client := newTestClient()
+	_, err := client.CreateTemplate("test", "image", "model", "key", 50)
 	if err == nil {
-		t.Fatal("expected error for GraphQL error response")
-	}
-	if !strings.Contains(err.Error(), "graphql error") {
-		t.Errorf("error should mention 'graphql error': %v", err)
-	}
-}
-
-func TestRunPodServerlessClient_HTTPError(t *testing.T) {
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
-	}
-	server := httptest.NewServer(http.HandlerFunc(handler))
-	defer server.Close()
-
-	client := newTestServerlessClient(server.URL)
-	_, err := client.SaveTemplate("test", "image", "model", "key", 50)
-	if err == nil {
-		t.Fatal("expected error for HTTP error response")
-	}
-	if !strings.Contains(err.Error(), "500") {
-		t.Errorf("error should mention status code: %v", err)
+		t.Fatal("expected error from CLI failure")
 	}
 }

@@ -300,6 +300,7 @@ model_name                 = "some/model"
 serverless_image_name      = "runpod/worker-vllm:stable-cuda12.1.0"
 serverless_endpoint_name   = "my-endpoint"
 serverless_workers_max     = 5
+serverless_gpu_type_id     = "ADA_LOVELACE_24"
 `
 	path := writeConfig(t, content, 0600)
 	cfg, err := config.Load(path)
@@ -314,5 +315,8 @@ serverless_workers_max     = 5
 	}
 	if cfg.ServerlessWorkersMax != 5 {
 		t.Errorf("ServerlessWorkersMax: got %d", cfg.ServerlessWorkersMax)
+	}
+	if cfg.ServerlessGPUTypeID != "ADA_LOVELACE_24" {
+		t.Errorf("ServerlessGPUTypeID: got %q", cfg.ServerlessGPUTypeID)
 	}
 }
