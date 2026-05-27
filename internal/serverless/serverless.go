@@ -90,40 +90,7 @@ func (c *RunPodServerlessClient) FindEndpointByName(name string) (*Endpoint, err
 	return nil, nil
 }
 
-func (c *RunPodServerlessClient) findTemplateByName(name string) (string, error) {
-	out, err := RunpodCtlFn(c.apiKey, "template", "list", "--type", "user")
-	if err != nil {
-		return "", fmt.Errorf("runpodctl template list: %w\n%s", err, out)
-	}
-
-	var templates []map[string]json.RawMessage
-	if err := json.Unmarshal(out, &templates); err != nil {
-		return "", fmt.Errorf("failed to parse template list output: %w\n%s", err, out)
-	}
-
-	for _, tpl := range templates {
-		var tplName string
-		if err := json.Unmarshal(tpl["name"], &tplName); err != nil {
-			continue
-		}
-		if tplName != name {
-			continue
-		}
-		var id string
-		if err := json.Unmarshal(tpl["id"], &id); err != nil {
-			continue
-		}
-		return id, nil
-	}
-
-	return "", nil
-}
-
 func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) {
-	if existing, err := c.findTemplateByName(name); err == nil && existing != "" {
-		return existing, nil
-	}
-
 	envJSON, err := json.Marshal(map[string]string{
 		"MODEL_NAME": modelName,
 		"HF_TOKEN":   apiKey,
