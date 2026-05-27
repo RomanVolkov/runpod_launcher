@@ -18,16 +18,22 @@ var cfgFile string
 var rootCmd = &cobra.Command{
 	Use:   "runpod-launcher",
 	Short: "Spin up and tear down a RunPod GPU pod running an LLM via RunPod proxy",
-	Long: `runpod-launcher manages a RunPod GPU pod running vLLM, exposed through a
-RunPod direct proxy so your OpenCode config never needs updating.
+	Long: `runpod-launcher manages RunPod GPU pods and serverless endpoints running LLM models.
 
 Usage:
-  runpod-launcher up                - create pod (interactive GPU selection available)
-  runpod-launcher down              - terminate pod and stop billing
-  runpod-launcher status            - check pod status
-  runpod-launcher model-status      - check if a model is loaded and ready
-  runpod-launcher availability      - list available GPU types with pricing
-  runpod-launcher init              - create default config file
+  Persistent Pods:
+    runpod-launcher up                - create pod (interactive GPU selection available)
+    runpod-launcher down              - terminate pod and stop billing
+    runpod-launcher status            - check pod status
+    runpod-launcher model-status      - check if a model is loaded and ready
+
+  Serverless Endpoints (pay-per-request):
+    runpod-launcher serverless up     - create/activate serverless endpoint
+    runpod-launcher serverless down   - scale serverless endpoint to zero (free idle)
+
+  Utilities:
+    runpod-launcher availability      - list available GPU types with pricing
+    runpod-launcher init              - create default config file
 
 Interactive Features:
   The 'up' command will ask if you want to select a different GPU with a
@@ -49,4 +55,5 @@ func init() {
 	rootCmd.AddCommand(modelStatusCmd)
 	rootCmd.AddCommand(availabilityCmd)
 	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(serverlessCmd)
 }
