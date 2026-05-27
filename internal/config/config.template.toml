@@ -85,6 +85,12 @@ serverless_workers_max = 0
 # Use 'runpod-launcher availability' to see GPU IDs and pricing
 # serverless_gpu_type_id = "NVIDIA A100-SXM4-80GB"
 
+# Model name for serverless endpoint (HuggingFace format, e.g., "Qwen/Qwen3-32B")
+# If set, overrides the pod's model_name for serverless deployment
+# Ollama models use "modelname:tag" format for pods; vLLM serverless uses HuggingFace repo IDs
+# Leave empty to use the pod's model_name field
+serverless_model_name = ""
+
 # Optional extra environment variables to inject into the pod
 # [env_vars]
 # MY_VAR = "value"

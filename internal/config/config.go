@@ -38,6 +38,7 @@ type Config struct {
 	ServerlessEndpointName string `toml:"serverless_endpoint_name"`
 	ServerlessWorkersMax   int    `toml:"serverless_workers_max"`
 	ServerlessGPUTypeID    string `toml:"serverless_gpu_type_id"`
+	ServerlessModelName    string `toml:"serverless_model_name"`
 
 	// configPath is stored but not serialized - used by SaveAPIKey
 	configPath string
