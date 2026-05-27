@@ -12,6 +12,13 @@ import (
 // provided values. The path may use ~ for the home directory, which is expanded.
 // If the parent directory does not exist, an error is returned.
 func UpdateConfig(path, baseURL, apiKey, modelName string) error {
+	return UpdateConfigWithProvider(path, baseURL, apiKey, modelName, "runpod")
+}
+
+// UpdateConfigWithProvider is like UpdateConfig but allows specifying the provider name.
+// This enables updating either the "runpod" provider (for pods) or "runpod-serverless"
+// provider (for serverless endpoints) in the same config file.
+func UpdateConfigWithProvider(path, baseURL, apiKey, modelName, providerName string) error {
 	// Expand ~ to home directory
 	var expandedPath string
 	if len(path) > 0 && path[0] == '~' {
@@ -52,26 +59,26 @@ func UpdateConfig(path, baseURL, apiKey, modelName string) error {
 		config["provider"] = provider
 	}
 
-	// Ensure runpod map exists
-	runpod, ok := provider["runpod"].(map[string]interface{})
+	// Ensure provider config exists
+	providerCfg, ok := provider[providerName].(map[string]interface{})
 	if !ok {
-		runpod = make(map[string]interface{})
-		provider["runpod"] = runpod
+		providerCfg = make(map[string]interface{})
+		provider[providerName] = providerCfg
 	}
 
 	// Set name and npm so OpenCode recognizes this as a valid provider
-	if _, ok := runpod["name"]; !ok {
-		runpod["name"] = "RunPod"
+	if _, ok := providerCfg["name"]; !ok {
+		providerCfg["name"] = providerDisplayName(providerName)
 	}
-	if _, ok := runpod["npm"]; !ok {
-		runpod["npm"] = "@ai-sdk/openai-compatible"
+	if _, ok := providerCfg["npm"]; !ok {
+		providerCfg["npm"] = "@ai-sdk/openai-compatible"
 	}
 
 	// Ensure models map exists (required for OpenCode to recognize the provider)
-	models, ok := runpod["models"].(map[string]interface{})
+	models, ok := providerCfg["models"].(map[string]interface{})
 	if !ok {
 		models = make(map[string]interface{})
-		runpod["models"] = models
+		providerCfg["models"] = models
 	}
 
 	// Add the model if provided
@@ -80,10 +87,10 @@ func UpdateConfig(path, baseURL, apiKey, modelName string) error {
 	}
 
 	// Ensure options map exists
-	options, ok := runpod["options"].(map[string]interface{})
+	options, ok := providerCfg["options"].(map[string]interface{})
 	if !ok {
 		options = make(map[string]interface{})
-		runpod["options"] = options
+		providerCfg["options"] = options
 	}
 
 	// Set baseURL and apiKey (both under options)
@@ -111,4 +118,15 @@ func UpdateConfig(path, baseURL, apiKey, modelName string) error {
 	}
 
 	return nil
+}
+
+func providerDisplayName(providerName string) string {
+	switch providerName {
+	case "runpod-serverless":
+		return "RunPod Serverless"
+	case "runpod":
+		return "RunPod"
+	default:
+		return providerName
+	}
 }
