@@ -90,7 +90,60 @@ func (c *RunPodServerlessClient) FindEndpointByName(name string) (*Endpoint, err
 	return nil, nil
 }
 
+func (c *RunPodServerlessClient) findTemplateByName(name string) (*map[string]json.RawMessage, error) {
+	out, err := RunpodCtlFn(c.apiKey, "template", "list", "--type", "user")
+	if err != nil {
+		return nil, fmt.Errorf("runpodctl template list: %w\n%s", err, out)
+	}
+
+	var templates []map[string]json.RawMessage
+	if err := json.Unmarshal(out, &templates); err != nil {
+		return nil, fmt.Errorf("failed to parse template list output: %w\n%s", err, out)
+	}
+
+	for i, tpl := range templates {
+		var tplName string
+		if err := json.Unmarshal(tpl["name"], &tplName); err != nil {
+			continue
+		}
+		if tplName != name {
+			continue
+		}
+		return &templates[i], nil
+	}
+
+	return nil, nil
+}
+
 func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) {
+	// Check if template exists and has correct MODEL_NAME
+	existing, err := c.findTemplateByName(name)
+	if err != nil {
+		return "", err
+	}
+
+	if existing != nil {
+		// Template exists; check if it has the correct MODEL_NAME
+		if envRaw, ok := (*existing)["env"]; ok {
+			var envMap map[string]string
+			if err := json.Unmarshal(envRaw, &envMap); err == nil {
+				if currentModel, hasModel := envMap["MODEL_NAME"]; hasModel && currentModel == modelName {
+					// Template already has the correct MODEL_NAME; reuse it
+					var id string
+					if err := json.Unmarshal((*existing)["id"], &id); err == nil {
+						return id, nil
+					}
+				}
+			}
+		}
+
+		// Template exists but has wrong MODEL_NAME; delete and recreate
+		var id string
+		if err := json.Unmarshal((*existing)["id"], &id); err == nil {
+			_, _ = RunpodCtlFn(c.apiKey, "template", "delete", id)
+		}
+	}
+
 	envJSON, err := json.Marshal(map[string]string{
 		"MODEL_NAME": modelName,
 		"HF_TOKEN":   apiKey,

@@ -79,6 +79,11 @@ func TestFindEndpointByName_EmptyList(t *testing.T) {
 
 func TestCreateTemplate_ReturnsID(t *testing.T) {
 	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
+		// Handle template list (checking for existing templates)
+		if len(args) > 0 && args[0] == "template" && len(args) > 1 && args[1] == "list" {
+			return json.Marshal([]map[string]interface{}{})
+		}
+		// Handle template create
 		out, _ := json.Marshal(map[string]interface{}{"id": "tpl-abc123", "name": "test"})
 		return out, nil
 	})
@@ -96,6 +101,11 @@ func TestCreateTemplate_ReturnsID(t *testing.T) {
 func TestCreateTemplate_ArgsContainServerless(t *testing.T) {
 	var capturedArgs []string
 	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
+		// Handle template list (checking for existing templates)
+		if len(args) > 0 && args[0] == "template" && len(args) > 1 && args[1] == "list" {
+			return json.Marshal([]map[string]interface{}{})
+		}
+		// Capture create args
 		capturedArgs = args
 		out, _ := json.Marshal(map[string]interface{}{"id": "tpl-123"})
 		return out, nil
