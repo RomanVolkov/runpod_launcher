@@ -34,6 +34,10 @@ type Config struct {
 	OpenCodeConfigPath string            `toml:"opencode_config_path"`
 	EnvVars            map[string]string `toml:"env_vars"`
 
+	ServerlessImageName    string `toml:"serverless_image_name"`
+	ServerlessEndpointName string `toml:"serverless_endpoint_name"`
+	ServerlessWorkersMax   int    `toml:"serverless_workers_max"`
+
 	// configPath is stored but not serialized - used by SaveAPIKey
 	configPath string
 }

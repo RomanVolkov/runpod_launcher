@@ -67,6 +67,19 @@ last_llm_api_key = ""
 # Leave empty to skip auto-update
 opencode_config_path = ""
 
+# --- Serverless endpoint settings ---
+# Docker image for the serverless worker (default: runpod/worker-vllm:stable-cuda12.1.0)
+# Only used by 'serverless up' command
+serverless_image_name = ""
+
+# Name for the serverless endpoint in RunPod (default: llm-launcher-serverless)
+# Only used by 'serverless up' and 'serverless down' commands
+serverless_endpoint_name = ""
+
+# Maximum number of concurrent workers for serverless endpoint (default: 3)
+# Only used by 'serverless up' command
+serverless_workers_max = 0
+
 # Optional extra environment variables to inject into the pod
 # [env_vars]
 # MY_VAR = "value"

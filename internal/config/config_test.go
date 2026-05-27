@@ -291,3 +291,28 @@ func TestTemplateContent(t *testing.T) {
 		t.Error("TemplateContent should contain 'runpod_api_key'")
 	}
 }
+
+func TestLoad_ServerlessFields(t *testing.T) {
+	content := `
+runpod_api_key             = "rp_key"
+gpu_type_id                = "AMPERE_16"
+model_name                 = "some/model"
+serverless_image_name      = "runpod/worker-vllm:stable-cuda12.1.0"
+serverless_endpoint_name   = "my-endpoint"
+serverless_workers_max     = 5
+`
+	path := writeConfig(t, content, 0600)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if cfg.ServerlessImageName != "runpod/worker-vllm:stable-cuda12.1.0" {
+		t.Errorf("ServerlessImageName: got %q", cfg.ServerlessImageName)
+	}
+	if cfg.ServerlessEndpointName != "my-endpoint" {
+		t.Errorf("ServerlessEndpointName: got %q", cfg.ServerlessEndpointName)
+	}
+	if cfg.ServerlessWorkersMax != 5 {
+		t.Errorf("ServerlessWorkersMax: got %d", cfg.ServerlessWorkersMax)
+	}
+}
