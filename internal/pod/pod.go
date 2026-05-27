@@ -1,65 +1,3 @@
-// Package pod provides RunPod pod management for runpod-launcher.
-//
-// # RunPod GraphQL API Reference
-//
-// Endpoint: POST https://api.runpod.io/graphql
-// Content-Type: application/json
-// Authorization: Bearer <RunpodAPIKey>
-// Body: {"query": "<GraphQL operation string>"}
-//
-// ## Create pod (on-demand)
-//
-//	mutation {
-//	  podFindAndDeployOnDemand(input: {
-//	    gpuTypeId: "AMPERE_16",          // e.g. "AMPERE_16", "ADA_LOVELACE_24"
-//	    cloudType: SECURE,               // SECURE or COMMUNITY
-//	    imageName: "vllm/vllm-openai:latest",
-//	    containerDiskInGb: 50,
-//	    volumeMountPath: "/workspace",
-//	    dockerArgs: "<bash script>",     // startup command injected via startup.BuildStartupScript
-//	    env: [
-//	      { key: "LLM_API_KEY",  value: "..." },
-//	      { key: "MODEL_NAME",   value: "..." }
-//	    ],
-//	    ports: "8000/http"
-//	  }) {
-//	    id
-//	    desiredStatus
-//	  }
-//	}
-//
-// ## Get pod status
-//
-//	query {
-//	  pod(input: { podId: "<id>" }) {
-//	    id
-//	    desiredStatus
-//	    runtime {
-//	      uptimeInSeconds
-//	      ports { ip privatePort publicPort type }
-//	    }
-//	  }
-//	}
-//
-// ## List pods (find by name)
-//
-//	query {
-//	  myself {
-//	    pods {
-//	      id
-//	      name
-//	      desiredStatus
-//	    }
-//	  }
-//	}
-//
-// ## Terminate pod
-//
-//	mutation {
-//	  podTerminate(input: { podId: "<id>" })
-//	}
-//
-// Authorization: API key is sent as "Authorization: Bearer <RunpodAPIKey>" header.
 package pod
 
 import (
@@ -69,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -85,251 +24,95 @@ type PodStatus struct {
 
 // GPUType holds information about a GPU type on RunPod.
 type GPUType struct {
-	ID                         string
-	DisplayName                string
-	MemoryInGb                 int
-	SecurePrice                float64
-	CommunityPrice             float64
-	SecureSpotPrice            float64
-	CommunitySpotPrice         float64
-	SecureCloud                bool
-	CommunityCloud             bool
-	MaxGpuCountSecureCloud     int // Max simultaneously rentable GPUs on secure cloud (0 = unavailable)
-	MaxGpuCountCommunityCloud  int // Max simultaneously rentable GPUs on community cloud (0 = unavailable)
+	ID                        string
+	DisplayName               string
+	MemoryInGb                int
+	SecurePrice               float64
+	CommunityPrice            float64
+	SecureSpotPrice           float64
+	CommunitySpotPrice        float64
+	SecureCloud               bool
+	CommunityCloud            bool
+	MaxGpuCountSecureCloud    int
+	MaxGpuCountCommunityCloud int
 }
 
 // PodClient is the interface for interacting with RunPod's pod management API.
-// It is designed for easy test mocking without external HTTP.
 type PodClient interface {
-	// CreatePod provisions a new pod according to cfg and llmAPIKey, returning the pod ID.
 	CreatePod(cfg *config.Config, llmAPIKey string) (string, error)
-
-	// GetPodStatus returns the current status of the pod with the given ID.
 	GetPodStatus(podID string) (*PodStatus, error)
-
-	// TerminatePod terminates the pod with the given ID.
 	TerminatePod(podID string) error
-
-	// FindPodByName returns the pod ID of a running pod with the given name,
-	// or ("", nil) if no such pod is found.
 	FindPodByName(name string) (string, error)
-
-	// GetGPUTypes returns a list of available GPU types with pricing and availability info.
 	GetGPUTypes() ([]GPUType, error)
 }
 
-const runpodGraphQLEndpoint = "https://api.runpod.io/graphql"
-
-// DefaultPodName is the pod name used when config.PodName is empty.
 const DefaultPodName = "llm-launcher"
-
-// DefaultServicePort is the port on which the vLLM service listens inside the pod.
-// It is used both when building the startup script and when registering the pod's
-// HTTP port mapping, so both must stay in sync via this constant.
 const DefaultServicePort = 8000
-
-// DefaultImageName is the container image used when config.ImageName is empty.
 const DefaultImageName = "vllm/vllm-openai:latest"
-
-// DefaultContainerDiskGB is the container disk size (in GB) used when config.ContainerDiskGB is zero.
 const DefaultContainerDiskGB = 50
-
-// DefaultVolumeMountPath is the volume mount path used when config.VolumeMountPath is empty.
 const DefaultVolumeMountPath = "/workspace"
 
-// GetOllamaModelContext returns the maximum context window (in tokens) for a given Ollama model.
-// Uses a curated mapping of popular models to their official maximum context limits.
-// WARNING: Ensure your GPU has sufficient VRAM before using large context windows:
-// - < 24 GiB VRAM: stick to 4K-8K context
-// - 24-48 GiB VRAM: use up to 32K context
-// - >= 48 GiB VRAM: use 256K+ context without issues
-// Returns 0 if the model is not recognized.
-func GetOllamaModelContext(modelName string) (int, error) {
-	// Normalize to lowercase for comparison
-	lower := strings.ToLower(modelName)
-
-	// Strip any version tags for matching (e.g., "gemma4:31b" -> "gemma4")
-	baseName := lower
-	if idx := strings.Index(lower, ":"); idx != -1 {
-		baseName = lower[:idx]
-	}
-	// Normalize "llama3.1" to "llama31" for consistent matching
-	baseName = strings.ReplaceAll(baseName, ".", "")
-
-	// Model context window mappings based on official model specifications
-	modelContextMap := map[string]int{
-		// Gemma family
-		"gemma":      9216,     // Gemma 1 base ~9K
-		"gemma2":     9216,     // Gemma 2 ~9K
-		"gemma4":     262144,   // Gemma 4 31B ~262K (official max)
-
-		// Mistral family
-		"mistral":    32768,    // Mistral 7B ~32K
-		"mixtral":    32768,    // Mixtral 8x7B ~32K
-
-		// Llama family
-		"llama":      4096,     // Llama 2 ~4K
-		"llama2":     4096,     // Llama 2 ~4K
-		"llama3":     8192,     // Llama 3 ~8K
-		"llama31":    131072,   // Llama 3.1 ~128K
-
-		// Qwen family
-		"qwen":       32768,    // Qwen base ~32K
-
-		// Other popular models
-		"neural-chat": 4096,
-		"zephyr":      4096,
-		"openchat":    8192,
-		"starling":    4096,
-	}
-
-	if ctx, ok := modelContextMap[baseName]; ok {
-		return ctx, nil
-	}
-
-	// Model not in map - return 0 (caller will skip context setting)
-	return 0, nil
-}
-
-// StatusNotFound is the sentinel status emitted by the status command when no pod exists.
-// Note on status string conventions:
-//   - up/down commands emit synthetic CLI-friendly labels: "running" and "terminated".
-//   - status command emits raw RunPod desiredStatus values (e.g. "RUNNING", "STARTING")
-//     plus this sentinel when no pod is found.
-//
-// These two tiers are intentional: up/down report the outcome of their action in a
-// simple boolean sense; status reflects the live RunPod API state verbatim.
 const StatusNotFound = "not_found"
-
-// StatusRunning is the synthetic label emitted by the up command on success.
 const StatusRunning = "running"
-
-// StatusTerminated is the synthetic label emitted by the down command on success.
 const StatusTerminated = "terminated"
 
-// RunPodClient implements PodClient by calling RunPod's GraphQL API over net/http.
-type RunPodClient struct {
-	apiKey     string
-	httpClient *http.Client
-	// baseURL is the GraphQL endpoint. Defaults to runpodGraphQLEndpoint.
-	// Tests override this to point at a local httptest.Server.
-	baseURL string
+// RunpodCtlFn is the function used to call runpodctl. Tests override this.
+var RunpodCtlFn = func(apiKey string, args ...string) ([]byte, error) {
+	cmd := exec.Command("runpodctl", args...)
+	cmd.Env = append(os.Environ(), "RUNPOD_API_KEY="+apiKey)
+	return cmd.CombinedOutput()
 }
 
 // GetOllamaModelContextFunc is injected for testing; default calls GetOllamaModelContext.
 var GetOllamaModelContextFunc = GetOllamaModelContext
 
 // WaitForModelReadyFunc is injected for testing; default calls WaitForModelReady.
-// This allows tests to skip real network calls to the model API.
 var WaitForModelReadyFunc = WaitForModelReady
+
+// RunPodClient implements PodClient using the runpodctl CLI.
+type RunPodClient struct {
+	apiKey string
+}
 
 // NewRunPodClient returns a new RunPodClient authenticated with the given API key.
 func NewRunPodClient(apiKey string) PodClient {
-	return &RunPodClient{
-		apiKey:     apiKey,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		baseURL:    runpodGraphQLEndpoint,
-	}
+	return &RunPodClient{apiKey: apiKey}
 }
 
-// graphqlRequest sends a GraphQL request to the RunPod API and decodes the response body.
-func (c *RunPodClient) graphqlRequest(query string, variables map[string]interface{}) (map[string]interface{}, error) {
-	payload := map[string]interface{}{
-		"query": query,
-	}
-	if variables != nil {
-		payload["variables"] = variables
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal GraphQL request: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, c.baseURL, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("RunPod API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read RunPod API response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("RunPod API returned HTTP %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode RunPod API response: %w", err)
-	}
-
-	// Surface GraphQL-level errors.
-	if errs, ok := result["errors"]; ok {
-		return nil, fmt.Errorf("RunPod GraphQL error: %v", errs)
-	}
-
-	return result, nil
-}
-
-// CreatePod provisions a new RunPod pod described by cfg and returns its pod ID.
-// It injects the provided llmAPIKey and other configuration as pod env vars and uses
-// startup.BuildStartupScript as the startup command.
 func (c *RunPodClient) CreatePod(cfg *config.Config, llmAPIKey string) (string, error) {
 	startupScript, err := startup.BuildStartupScript(cfg.ModelName, llmAPIKey, DefaultServicePort, cfg.MaxModelLen, cfg.ToolCallParser)
 	if err != nil {
 		return "", fmt.Errorf("failed to build startup script: %w", err)
 	}
 
-	// Build the env array for the GraphQL mutation.
-	// These env vars are passed to the pod.
-	envVars := []map[string]string{}
+	envMap := make(map[string]string)
 	for k, v := range cfg.EnvVars {
-		envVars = append(envVars, map[string]string{"key": k, "value": v})
+		envMap[k] = v
 	}
 
-	// For Ollama, set OLLAMA_HOST and auto-detect OLLAMA_NUM_CTX
 	if cfg.ImageName != "" && strings.Contains(strings.ToLower(cfg.ImageName), "ollama") {
-		envVars = append(envVars, map[string]string{
-			"key":   "OLLAMA_HOST",
-			"value": fmt.Sprintf("0.0.0.0:%d", DefaultServicePort),
-		})
+		envMap["OLLAMA_HOST"] = fmt.Sprintf("0.0.0.0:%d", DefaultServicePort)
 
-		// Determine context window: use config override if set, otherwise auto-detect
-		var numCtx int
 		if cfg.OllamaContextLen > 0 {
-			// Use explicit config override
-			numCtx = cfg.OllamaContextLen
-			fmt.Fprintf(os.Stderr, "Using Ollama context from config: %d tokens\n", numCtx)
-			envVars = append(envVars, map[string]string{
-				"key":   "OLLAMA_CONTEXT_LENGTH",
-				"value": fmt.Sprintf("%d", numCtx),
-			})
+			fmt.Fprintf(os.Stderr, "Using Ollama context from config: %d tokens\n", cfg.OllamaContextLen)
+			envMap["OLLAMA_CONTEXT_LENGTH"] = fmt.Sprintf("%d", cfg.OllamaContextLen)
 		} else {
-			// Auto-detect context window from model mapping
 			fmt.Fprintf(os.Stderr, "Looking up context window for model: %s\n", cfg.ModelName)
 			detected, err := GetOllamaModelContextFunc(cfg.ModelName)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "warning: could not look up context window: %v\n", err)
 			} else if detected > 0 {
 				fmt.Fprintf(os.Stderr, "Auto-detected context window: %d tokens\n", detected)
-				envVars = append(envVars, map[string]string{
-					"key":   "OLLAMA_CONTEXT_LENGTH",
-					"value": fmt.Sprintf("%d", detected),
-				})
+				envMap["OLLAMA_CONTEXT_LENGTH"] = fmt.Sprintf("%d", detected)
 			} else {
 				fmt.Fprintf(os.Stderr, "warning: model %q not recognized in context mapping - using Ollama default (2048 tokens)\n", cfg.ModelName)
 			}
 		}
+	}
+
+	envJSON, err := json.Marshal(envMap)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal env vars: %w", err)
 	}
 
 	imageName := cfg.ImageName
@@ -349,192 +132,235 @@ func (c *RunPodClient) CreatePod(cfg *config.Config, llmAPIKey string) (string, 
 		podName = DefaultPodName
 	}
 
-	query := `
-mutation CreatePod($input: PodFindAndDeployOnDemandInput!) {
-  podFindAndDeployOnDemand(input: $input) {
-    id
-    desiredStatus
-  }
-}`
-
-	input := map[string]interface{}{
-		"gpuTypeId": cfg.GPUTypeID,
-		"gpuCount":  1,
-		// cloudType is fixed to SECURE (vs COMMUNITY) to ensure dedicated GPU
-		// resources and avoid shared-host networking restrictions. There is
-		// intentionally no config option for this.
-		"cloudType":        "SECURE",
-		"name":             podName,
-		"imageName":        imageName,
-		"containerDiskInGb": diskGB,
-		"volumeMountPath":  volumePath,
-		"dockerArgs":       startupScript,
-		"env":              envVars,
-		"startSsh":         true,
-		"ports":            "8000/http",
+	args := []string{
+		"pod", "create",
+		"--name", podName,
+		"--image", imageName,
+		"--gpu-id", cfg.GPUTypeID,
+		"--cloud-type", "SECURE",
+		"--container-disk-in-gb", fmt.Sprintf("%d", diskGB),
+		"--volume-mount-path", volumePath,
+		"--ports", "8000/http",
+		"--env", string(envJSON),
+		"--docker-args", startupScript,
+		"--ssh",
 	}
 
-	// Add CUDA version constraint if specified
 	if cfg.CudaVersion != "" {
-		input["cudaVersion"] = cfg.CudaVersion
+		args = append(args, "--min-cuda-version", cfg.CudaVersion)
 	}
-
-	// Add region preference if specified
 	if cfg.Region != "" {
-		input["region"] = cfg.Region
+		args = append(args, "--data-center-ids", cfg.Region)
 	}
 
-	// Log the request for debugging
-	inputJSON, _ := json.MarshalIndent(input, "", "  ")
+	inputJSON, _ := json.MarshalIndent(map[string]interface{}{
+		"podName":    podName,
+		"imageName":  imageName,
+		"gpuTypeId":  cfg.GPUTypeID,
+		"diskGB":     diskGB,
+		"volumePath": volumePath,
+		"env":        envMap,
+	}, "", "  ")
 	fmt.Fprintf(os.Stderr, "Creating pod with input:\n%s\n", string(inputJSON))
 
-	result, err := c.graphqlRequest(query, map[string]interface{}{"input": input})
+	out, err := RunpodCtlFn(c.apiKey, args...)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("runpodctl pod create: %w\n%s", err, out)
 	}
 
-	data, ok := result["data"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("unexpected RunPod API response shape: %v", result)
-	}
-	podData, ok := data["podFindAndDeployOnDemand"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("podFindAndDeployOnDemand not found in response: %v", data)
-	}
-	id, ok := podData["id"].(string)
-	if !ok || id == "" {
-		return "", fmt.Errorf("pod ID missing in RunPod response: %v", podData)
-	}
-	return id, nil
+	return parsePodID(out)
 }
 
-// GetPodStatus returns the current status of the pod identified by podID.
 func (c *RunPodClient) GetPodStatus(podID string) (*PodStatus, error) {
-	query := `
-query GetPod($input: PodFilter!) {
-  pod(input: $input) {
-    id
-    desiredStatus
-    runtime {
-      uptimeInSeconds
-    }
-  }
-}`
-
-	result, err := c.graphqlRequest(query, map[string]interface{}{
-		"input": map[string]string{"podId": podID},
-	})
+	out, err := RunpodCtlFn(c.apiKey, "pod", "get", podID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("runpodctl pod get: %w\n%s", err, out)
 	}
 
-	data, ok := result["data"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected RunPod API response: %v", result)
+	var pod map[string]json.RawMessage
+	if err := json.Unmarshal(out, &pod); err != nil {
+		return nil, fmt.Errorf("failed to parse pod get output: %w\n%s", err, out)
 	}
 
-	// A null pod field ({"data":{"pod":null}}) means the pod does not exist;
-	// return a not-found sentinel rather than an error so callers can distinguish
-	// "pod gone" from a real API failure.
-	if data["pod"] == nil {
+	if pod == nil {
 		return &PodStatus{ID: podID, Status: "NOT_FOUND", DesiredStatus: ""}, nil
 	}
 
-	podData, ok := data["pod"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected pod field type in RunPod API response: %v", data)
+	var desiredStatus string
+	if raw, ok := pod["desiredStatus"]; ok {
+		_ = json.Unmarshal(raw, &desiredStatus)
 	}
 
 	status := &PodStatus{
 		ID:            podID,
-		DesiredStatus: stringField(podData, "desiredStatus"),
+		DesiredStatus: desiredStatus,
 	}
 
-	// Report RUNNING only when runtime is non-nil AND desiredStatus is explicitly
-	// "RUNNING". This guards against a blank desiredStatus (API parse gap) or
-	// "EXITED" (pod being torn down still briefly has a runtime object).
-	if podData["runtime"] != nil && status.DesiredStatus == "RUNNING" {
+	hasRuntime := pod["runtime"] != nil
+	rawRuntime, _ := pod["runtime"]
+	if rawRuntime != nil {
+		var runtimeVal interface{}
+		if err := json.Unmarshal(rawRuntime, &runtimeVal); err == nil && runtimeVal != nil {
+			hasRuntime = true
+		} else {
+			hasRuntime = false
+		}
+	}
+
+	if hasRuntime && desiredStatus == "RUNNING" {
 		status.Status = "RUNNING"
 	} else {
-		status.Status = status.DesiredStatus
+		status.Status = desiredStatus
 	}
 
 	return status, nil
 }
 
-// TerminatePod terminates the pod with the given ID.
 func (c *RunPodClient) TerminatePod(podID string) error {
-	query := `
-mutation TerminatePod($input: PodTerminateInput!) {
-  podTerminate(input: $input)
-}`
-
-	_, err := c.graphqlRequest(query, map[string]interface{}{
-		"input": map[string]string{"podId": podID},
-	})
-	return err
+	out, err := RunpodCtlFn(c.apiKey, "pod", "delete", podID)
+	if err != nil {
+		return fmt.Errorf("runpodctl pod delete: %w\n%s", err, out)
+	}
+	return nil
 }
 
-// FindPodByName returns the pod ID of an existing pod with the given name,
-// or ("", nil) if no matching pod is found.
 func (c *RunPodClient) FindPodByName(name string) (string, error) {
-	query := `
-query ListPods {
-  myself {
-    pods {
-      id
-      name
-      desiredStatus
-    }
-  }
-}`
-
-	result, err := c.graphqlRequest(query, nil)
+	out, err := RunpodCtlFn(c.apiKey, "pod", "list", "--name", name)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("runpodctl pod list: %w\n%s", err, out)
 	}
 
-	data, ok := result["data"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("unexpected RunPod API response: %v", result)
-	}
-	myself, ok := data["myself"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("myself not found in response: %v", data)
-	}
-	// A null pods field is a valid "no pods" response; any other non-array type
-	// indicates an unexpected API shape and should surface as an error.
-	if myself["pods"] == nil {
-		return "", nil
-	}
-	pods, ok := myself["pods"].([]interface{})
-	if !ok {
-		return "", fmt.Errorf("unexpected pods field type in RunPod API response: %v", myself)
+	var pods []map[string]json.RawMessage
+	if err := json.Unmarshal(out, &pods); err != nil {
+		return "", fmt.Errorf("failed to parse pod list output: %w\n%s", err, out)
 	}
 
-	for _, p := range pods {
-		pod, ok := p.(map[string]interface{})
-		if !ok {
-			continue
+	for _, pod := range pods {
+		var podName, desiredStatus, id string
+		if raw, ok := pod["name"]; ok {
+			_ = json.Unmarshal(raw, &podName)
 		}
-		if stringField(pod, "name") == name && stringField(pod, "desiredStatus") != "EXITED" {
-			return stringField(pod, "id"), nil
+		if raw, ok := pod["desiredStatus"]; ok {
+			_ = json.Unmarshal(raw, &desiredStatus)
+		}
+		if raw, ok := pod["id"]; ok {
+			_ = json.Unmarshal(raw, &id)
+		}
+
+		if podName == name && desiredStatus != "EXITED" {
+			return id, nil
 		}
 	}
+
 	return "", nil
 }
 
-// stringField safely extracts a string field from a map.
-func stringField(m map[string]interface{}, key string) string {
-	v, _ := m[key].(string)
-	return v
+func (c *RunPodClient) GetGPUTypes() ([]GPUType, error) {
+	out, err := RunpodCtlFn(c.apiKey, "gpu", "list")
+	if err != nil {
+		return nil, fmt.Errorf("runpodctl gpu list: %w\n%s", err, out)
+	}
+
+	var rawGPUs []map[string]json.RawMessage
+	if err := json.Unmarshal(out, &rawGPUs); err != nil {
+		return nil, fmt.Errorf("failed to parse gpu list output: %w\n%s", err, out)
+	}
+
+	var gpuTypes []GPUType
+	for _, raw := range rawGPUs {
+		gpu := GPUType{}
+		if v, ok := raw["id"]; ok {
+			_ = json.Unmarshal(v, &gpu.ID)
+		}
+		if v, ok := raw["displayName"]; ok {
+			_ = json.Unmarshal(v, &gpu.DisplayName)
+		}
+		if v, ok := raw["memoryInGb"]; ok {
+			_ = json.Unmarshal(v, &gpu.MemoryInGb)
+		}
+		if v, ok := raw["securePrice"]; ok {
+			_ = json.Unmarshal(v, &gpu.SecurePrice)
+		}
+		if v, ok := raw["communityPrice"]; ok {
+			_ = json.Unmarshal(v, &gpu.CommunityPrice)
+		}
+		if v, ok := raw["secureSpotPrice"]; ok {
+			_ = json.Unmarshal(v, &gpu.SecureSpotPrice)
+		}
+		if v, ok := raw["communitySpotPrice"]; ok {
+			_ = json.Unmarshal(v, &gpu.CommunitySpotPrice)
+		}
+		if v, ok := raw["secureCloud"]; ok {
+			_ = json.Unmarshal(v, &gpu.SecureCloud)
+		}
+		if v, ok := raw["communityCloud"]; ok {
+			_ = json.Unmarshal(v, &gpu.CommunityCloud)
+		}
+		if v, ok := raw["maxGpuCountSecureCloud"]; ok {
+			_ = json.Unmarshal(v, &gpu.MaxGpuCountSecureCloud)
+		}
+		if v, ok := raw["maxGpuCountCommunityCloud"]; ok {
+			_ = json.Unmarshal(v, &gpu.MaxGpuCountCommunityCloud)
+		}
+		gpuTypes = append(gpuTypes, gpu)
+	}
+
+	return gpuTypes, nil
+}
+
+func parsePodID(out []byte) (string, error) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(out, &obj); err != nil {
+		return "", fmt.Errorf("failed to parse CLI output: %w\n%s", err, out)
+	}
+	raw, ok := obj["id"]
+	if !ok {
+		return "", fmt.Errorf("no 'id' field in CLI output: %s", out)
+	}
+	var id string
+	if err := json.Unmarshal(raw, &id); err != nil {
+		return "", fmt.Errorf("failed to parse 'id' field: %w", err)
+	}
+	return id, nil
+}
+
+// GetOllamaModelContext returns the maximum context window (in tokens) for a given Ollama model.
+func GetOllamaModelContext(modelName string) (int, error) {
+	lower := strings.ToLower(modelName)
+
+	baseName := lower
+	if idx := strings.Index(lower, ":"); idx != -1 {
+		baseName = lower[:idx]
+	}
+	baseName = strings.ReplaceAll(baseName, ".", "")
+
+	modelContextMap := map[string]int{
+		"gemma":       9216,
+		"gemma2":      9216,
+		"gemma4":      262144,
+		"mistral":     32768,
+		"mixtral":     32768,
+		"llama":       4096,
+		"llama2":      4096,
+		"llama3":      8192,
+		"llama31":     131072,
+		"qwen":        32768,
+		"neural-chat": 4096,
+		"zephyr":      4096,
+		"openchat":    8192,
+		"starling":    4096,
+	}
+
+	if ctx, ok := modelContextMap[baseName]; ok {
+		return ctx, nil
+	}
+
+	return 0, nil
 }
 
 // WaitForReady polls GetPodStatus every tickInterval until the pod status is "RUNNING"
 // or timeout is exceeded. Progress dots are printed to stderr to keep stdout clean
 // for --json output mode.
-//
-// tickInterval controls the polling frequency; pass 0 to use the default of 5 seconds.
 func WaitForReady(client PodClient, podID string, timeout time.Duration, stderr io.Writer, tickInterval ...time.Duration) error {
 	interval := 5 * time.Second
 	if len(tickInterval) > 0 && tickInterval[0] > 0 {
@@ -546,7 +372,6 @@ func WaitForReady(client PodClient, podID string, timeout time.Duration, stderr 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// Check immediately before waiting for the first tick.
 	status, err := client.GetPodStatus(podID)
 	if err == nil && status.Status == "RUNNING" {
 		return nil
@@ -556,7 +381,7 @@ func WaitForReady(client PodClient, podID string, timeout time.Duration, stderr 
 	for {
 		select {
 		case <-timer.C:
-			fmt.Fprintln(stderr) // newline after dots
+			fmt.Fprintln(stderr)
 			return fmt.Errorf("timed out waiting for pod %s to become RUNNING after %s", podID, timeout)
 		case <-ticker.C:
 			status, err := client.GetPodStatus(podID)
@@ -565,7 +390,7 @@ func WaitForReady(client PodClient, podID string, timeout time.Duration, stderr 
 				continue
 			}
 			if status.Status == "RUNNING" {
-				fmt.Fprintln(stderr) // newline after dots
+				fmt.Fprintln(stderr)
 				return nil
 			}
 			fmt.Fprint(stderr, ".")
@@ -574,12 +399,7 @@ func WaitForReady(client PodClient, podID string, timeout time.Duration, stderr 
 }
 
 // CheckModelStatus queries the vLLM API to check if a model is loaded and ready.
-// baseURL should be the vLLM endpoint (e.g., "https://...-8000.proxy.runpod.net/v1").
-// apiKey is the API key required by the vLLM server (can be empty if no auth is required).
-// Returns true if the model is loaded, false otherwise.
 func CheckModelStatus(baseURL, modelName, apiKey string) (bool, error) {
-	// Query the /models endpoint to list loaded models
-	// vLLM's OpenAI-compatible API serves models at {baseURL}/models
 	modelsURL := baseURL + "/models"
 
 	req, err := http.NewRequest(http.MethodGet, modelsURL, nil)
@@ -587,7 +407,6 @@ func CheckModelStatus(baseURL, modelName, apiKey string) (bool, error) {
 		return false, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add API key header if provided (vLLM requires it if --api-key is set)
 	if apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
@@ -609,16 +428,13 @@ func CheckModelStatus(baseURL, modelName, apiKey string) (bool, error) {
 		return false, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Log the response for debugging
 	fmt.Fprintf(os.Stderr, "Models response: %s\n", string(respBody))
 
-	// Parse the response to check if the model is in the list
 	var result map[string]interface{}
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return false, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	// OpenAI-compatible API returns {"data": [{"id": "model-name"}, ...]}
 	data, ok := result["data"].([]interface{})
 	if !ok {
 		return false, fmt.Errorf("unexpected response format: no 'data' field")
@@ -630,11 +446,9 @@ func CheckModelStatus(baseURL, modelName, apiKey string) (bool, error) {
 			continue
 		}
 		if modelID, ok := model["id"].(string); ok {
-			// Check exact match
 			if modelID == modelName {
 				return true, nil
 			}
-			// For Ollama: if modelName is "gemma4", also match "gemma4:latest"
 			if modelID == modelName+":latest" {
 				return true, nil
 			}
@@ -645,7 +459,6 @@ func CheckModelStatus(baseURL, modelName, apiKey string) (bool, error) {
 }
 
 // PullOllamaModel pulls a model in Ollama via the /api/pull endpoint.
-// It retries with backoff to wait for Ollama server to be ready.
 func PullOllamaModel(baseURL, modelName string, stderr io.Writer) error {
 	pullURL := baseURL + "/api/pull"
 
@@ -659,7 +472,6 @@ func PullOllamaModel(baseURL, modelName string, stderr io.Writer) error {
 		return fmt.Errorf("failed to marshal pull request: %w", err)
 	}
 
-	// Retry with backoff to wait for Ollama server to start
 	maxRetries := 12
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		req, err := http.NewRequest(http.MethodPost, pullURL, bytes.NewReader(body))
@@ -668,7 +480,7 @@ func PullOllamaModel(baseURL, modelName string, stderr io.Writer) error {
 		}
 		req.Header.Set("Content-Type", "application/json")
 
-		client := &http.Client{Timeout: 30 * time.Minute} // Long timeout for model download
+		client := &http.Client{Timeout: 30 * time.Minute}
 		resp, err := client.Do(req)
 		if err != nil {
 			if attempt < maxRetries-1 {
@@ -685,7 +497,6 @@ func PullOllamaModel(baseURL, modelName string, stderr io.Writer) error {
 			return nil
 		}
 
-		// If server not ready, retry
 		if resp.StatusCode >= 500 || resp.StatusCode == 404 {
 			if attempt < maxRetries-1 {
 				fmt.Fprintf(stderr, ".")
@@ -702,8 +513,6 @@ func PullOllamaModel(baseURL, modelName string, stderr io.Writer) error {
 }
 
 // WaitForModelReady polls CheckModelStatus until the model is loaded or timeout is reached.
-// It writes progress dots to stderr as it waits.
-// tickInterval is the polling interval; if zero or omitted, defaults to 5 seconds.
 func WaitForModelReady(baseURL, modelName, apiKey string, timeout time.Duration, stderr io.Writer, tickInterval ...time.Duration) error {
 	interval := 5 * time.Second
 	if len(tickInterval) > 0 && tickInterval[0] > 0 {
@@ -725,85 +534,4 @@ func WaitForModelReady(baseURL, modelName, apiKey string, timeout time.Duration,
 		fmt.Fprint(stderr, ".")
 		time.Sleep(interval)
 	}
-}
-
-// GetGPUTypes queries RunPod for available GPU types with pricing and availability info.
-func (c *RunPodClient) GetGPUTypes() ([]GPUType, error) {
-	query := `
-query ListGpuTypes {
-  gpuTypes {
-    id
-    displayName
-    memoryInGb
-    securePrice
-    communityPrice
-    secureSpotPrice
-    communitySpotPrice
-    secureCloud
-    communityCloud
-    maxGpuCountSecureCloud
-    maxGpuCountCommunityCloud
-  }
-}`
-
-	result, err := c.graphqlRequest(query, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	data, ok := result["data"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("unexpected RunPod API response: %v", result)
-	}
-
-	gpuTypesData, ok := data["gpuTypes"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("gpuTypes not found or not an array in response: %v", data)
-	}
-
-	var gpuTypes []GPUType
-	for _, gpu := range gpuTypesData {
-		gpuMap, ok := gpu.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		gpuType := GPUType{
-			ID:          stringField(gpuMap, "id"),
-			DisplayName: stringField(gpuMap, "displayName"),
-		}
-
-		// Parse numeric fields
-		if memStr, ok := gpuMap["memoryInGb"].(float64); ok {
-			gpuType.MemoryInGb = int(memStr)
-		}
-		if price, ok := gpuMap["securePrice"].(float64); ok {
-			gpuType.SecurePrice = price
-		}
-		if price, ok := gpuMap["communityPrice"].(float64); ok {
-			gpuType.CommunityPrice = price
-		}
-		if price, ok := gpuMap["secureSpotPrice"].(float64); ok {
-			gpuType.SecureSpotPrice = price
-		}
-		if price, ok := gpuMap["communitySpotPrice"].(float64); ok {
-			gpuType.CommunitySpotPrice = price
-		}
-		if secure, ok := gpuMap["secureCloud"].(bool); ok {
-			gpuType.SecureCloud = secure
-		}
-		if community, ok := gpuMap["communityCloud"].(bool); ok {
-			gpuType.CommunityCloud = community
-		}
-		if maxCount, ok := gpuMap["maxGpuCountSecureCloud"].(float64); ok {
-			gpuType.MaxGpuCountSecureCloud = int(maxCount)
-		}
-		if maxCount, ok := gpuMap["maxGpuCountCommunityCloud"].(float64); ok {
-			gpuType.MaxGpuCountCommunityCloud = int(maxCount)
-		}
-
-		gpuTypes = append(gpuTypes, gpuType)
-	}
-
-	return gpuTypes, nil
 }
