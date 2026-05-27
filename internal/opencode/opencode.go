@@ -36,7 +36,8 @@ func UpdateConfig(path, baseURL, apiKey, modelName string) error {
 	if err == nil {
 		err = json.Unmarshal(data, &config)
 		if err != nil {
-			return err
+			// File exists but is invalid JSON — start fresh to avoid failing the entire operation
+			config = make(map[string]interface{})
 		}
 	} else if os.IsNotExist(err) {
 		config = make(map[string]interface{})
