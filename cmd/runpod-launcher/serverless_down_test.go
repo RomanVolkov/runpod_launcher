@@ -41,9 +41,7 @@ func TestServerlessDown_JSONOutput_Success(t *testing.T) {
 		findEndpointFn: func(name string) (*serverless.Endpoint, error) {
 			return &serverless.Endpoint{ID: "ep-abc123", Name: name, WorkersMin: 0, WorkersMax: 3}, nil
 		},
-		saveEndpointFn: func(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
-			return endpointID, nil
-		},
+		scaleToZeroFn: func(endpointID string) error { return nil },
 	}
 
 	orig := newServerlessClient
@@ -70,9 +68,7 @@ func TestServerlessDown_PlainText_Success(t *testing.T) {
 		findEndpointFn: func(name string) (*serverless.Endpoint, error) {
 			return &serverless.Endpoint{ID: "ep-xyz", Name: name}, nil
 		},
-		saveEndpointFn: func(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
-			return endpointID, nil
-		},
+		scaleToZeroFn: func(endpointID string) error { return nil },
 	}
 
 	orig := newServerlessClient
@@ -112,18 +108,17 @@ func TestServerlessDown_NotFound(t *testing.T) {
 	}
 }
 
-func TestServerlessDown_SaveEndpointCalled_WithZeroWorkers(t *testing.T) {
+func TestServerlessDown_ScaleToZeroCalledWithEndpointID(t *testing.T) {
 	configPath := writeTestConfig(t, testConfig)
 
-	var capturedWorkersMin, capturedWorkersMax int
+	var capturedID string
 	mock := &mockServerlessClient{
 		findEndpointFn: func(name string) (*serverless.Endpoint, error) {
 			return &serverless.Endpoint{ID: "ep-123", Name: name, WorkersMin: 2, WorkersMax: 5}, nil
 		},
-		saveEndpointFn: func(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
-			capturedWorkersMin = workersMin
-			capturedWorkersMax = workersMax
-			return endpointID, nil
+		scaleToZeroFn: func(endpointID string) error {
+			capturedID = endpointID
+			return nil
 		},
 	}
 
@@ -136,20 +131,20 @@ func TestServerlessDown_SaveEndpointCalled_WithZeroWorkers(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if capturedWorkersMin != 0 || capturedWorkersMax != 0 {
-		t.Errorf("SaveEndpoint should be called with workersMin=0, workersMax=0, got %d/%d", capturedWorkersMin, capturedWorkersMax)
+	if capturedID != "ep-123" {
+		t.Errorf("ScaleToZero called with %q, want 'ep-123'", capturedID)
 	}
 }
 
-func TestServerlessDown_SaveEndpointError(t *testing.T) {
+func TestServerlessDown_ScaleToZeroError(t *testing.T) {
 	configPath := writeTestConfig(t, testConfig)
 
 	mock := &mockServerlessClient{
 		findEndpointFn: func(name string) (*serverless.Endpoint, error) {
 			return &serverless.Endpoint{ID: "ep-123", Name: name}, nil
 		},
-		saveEndpointFn: func(endpointID, name, gpuIDs, templateID string, workersMin, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
-			return "", errors.New("scale operation failed")
+		scaleToZeroFn: func(endpointID string) error {
+			return errors.New("scale operation failed")
 		},
 	}
 
@@ -159,7 +154,7 @@ func TestServerlessDown_SaveEndpointError(t *testing.T) {
 
 	_, err := executeServerlessDownDirect(t, configPath, false)
 	if err == nil {
-		t.Fatal("expected error from SaveEndpoint")
+		t.Fatal("expected error from ScaleToZero")
 	}
 	if !strings.Contains(err.Error(), "scale") {
 		t.Errorf("error should mention scale: %v", err)

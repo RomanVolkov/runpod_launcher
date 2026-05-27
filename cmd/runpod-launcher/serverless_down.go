@@ -43,19 +43,7 @@ func runServerlessDown(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("serverless endpoint %q not found", endpointName)
 	}
 
-	// Scale to zero: workersMin=0, workersMax=0
-	_, err = client.SaveEndpoint(
-		existing.ID,
-		existing.Name,
-		"",  // gpuIDs: empty string — API keeps existing GPU config when updating
-		"",  // templateID: empty string — API keeps existing template when updating
-		0,   // workersMin
-		0,   // workersMax
-		serverless.DefaultIdleTimeout,
-		serverless.DefaultScalerValue,
-		serverless.DefaultScalerType,
-	)
-	if err != nil {
+	if err := client.ScaleToZero(existing.ID); err != nil {
 		return fmt.Errorf("failed to scale endpoint to zero: %w", err)
 	}
 
