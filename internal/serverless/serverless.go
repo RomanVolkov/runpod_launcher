@@ -178,7 +178,7 @@ func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiK
 		return "", fmt.Errorf("failed to marshal env vars: %w", err)
 	}
 
-	out, err := RunpodCtlFn(c.apiKey,
+	args := []string{
 		"template", "create",
 		"--name", name,
 		"--image", imageName,
@@ -186,7 +186,16 @@ func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiK
 		"--container-disk-in-gb", fmt.Sprintf("%d", containerDiskGB),
 		"--ports", "8000/http",
 		"--env", string(envJSON),
-	)
+	}
+
+	// For Ollama, add a socat reverse proxy since Ollama listens on 11434 but serverless expects 8000
+	if isOllamaImage(imageName) {
+		args = append(args,
+			"--docker-start-cmd", "socat TCP-LISTEN:8000,reuseaddr,fork TCP:localhost:11434 &",
+		)
+	}
+
+	out, err := RunpodCtlFn(c.apiKey, args...)
 	if err != nil {
 		return "", fmt.Errorf("runpodctl template create: %w\n%s", err, out)
 	}
