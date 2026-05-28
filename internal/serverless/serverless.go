@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 const (
@@ -158,10 +159,20 @@ func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiK
 		}
 	}
 
-	envJSON, err := json.Marshal(map[string]string{
-		"MODEL_NAME": modelName,
-		"HF_TOKEN":   apiKey,
-	})
+	// Build environment variables based on image type
+	env := map[string]string{}
+	if isOllamaImage(imageName) {
+		// Ollama-specific: listen on port 8000 (serverless expects port 8000)
+		env["OLLAMA_HOST"] = "0.0.0.0:8000"
+		// Set model to pull (format: modelname:tag, e.g. gemma4:latest)
+		env["OLLAMA_MODEL"] = modelName
+	} else {
+		// vLLM or other frameworks: use MODEL_NAME format (HuggingFace repo IDs)
+		env["MODEL_NAME"] = modelName
+		env["HF_TOKEN"] = apiKey
+	}
+
+	envJSON, err := json.Marshal(env)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal env vars: %w", err)
 	}
@@ -180,6 +191,10 @@ func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiK
 	}
 
 	return parseID(out)
+}
+
+func isOllamaImage(imageName string) bool {
+	return strings.Contains(imageName, "ollama")
 }
 
 func (c *RunPodServerlessClient) CreateEndpoint(name, gpuID, templateID string, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
