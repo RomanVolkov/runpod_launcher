@@ -114,7 +114,8 @@ func printServerlessUpResult(cmd *cobra.Command, asJSON bool, endpointID string,
 		if modelName == "" {
 			modelName = cfg.ModelName
 		}
-		if err := updateServerlessOpenCodeConfig(openCodePath, url, cfg.RunpodAPIKey, modelName, "runpod-serverless"); err != nil {
+		// RunPod serverless endpoints don't require an API key; the URL provides access control
+		if err := updateServerlessOpenCodeConfig(openCodePath, url, "", modelName, "runpod-serverless"); err != nil {
 			return fmt.Errorf("failed to update OpenCode config: %w", err)
 		}
 		openCodeUpdated = true
