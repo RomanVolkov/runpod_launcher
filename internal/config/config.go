@@ -32,6 +32,7 @@ type Config struct {
 	LastLLMAPIKey    string `toml:"last_llm_api_key"`
 
 	OpenCodeConfigPath string            `toml:"opencode_config_path"`
+	EnvFilePath        string            `toml:"env_file_path"`
 	EnvVars            map[string]string `toml:"env_vars"`
 
 	ServerlessImageName    string `toml:"serverless_image_name"`

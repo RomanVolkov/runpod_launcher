@@ -67,6 +67,11 @@ last_llm_api_key = ""
 # Leave empty to skip auto-update
 opencode_config_path = ""
 
+# Optional: path to .env file for storing credentials (e.g. ~/.env)
+# Leave empty to use ~/.env by default
+# Used by serverless endpoint to securely store API keys
+env_file_path = ""
+
 # --- Serverless endpoint settings ---
 # Docker image for the serverless worker (default: runpod/worker-vllm:stable-cuda12.1.0)
 # Only used by 'serverless up' command

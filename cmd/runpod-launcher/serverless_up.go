@@ -105,15 +105,21 @@ func printServerlessUpResult(cmd *cobra.Command, asJSON bool, endpointID string,
 	// Get the OpenCode config path
 	openCodePath := cfg.OpenCodeConfigPath
 
-	// Update OpenCode config with env var reference and write API key to ~/.env
+	// Update OpenCode config with env var reference and write API key to env file
 	if openCodePath != "" {
 		modelName := cfg.ServerlessModelName
 		if modelName == "" {
 			modelName = cfg.ModelName
 		}
 
-		// Write API key to ~/.env
-		if err := opencode.WriteEnvVar("RUNPOD_API_KEY", cfg.RunpodAPIKey); err == nil {
+		// Get env file path (default to ~/.env)
+		envFilePath := cfg.EnvFilePath
+		if envFilePath == "" {
+			envFilePath = "~/.env"
+		}
+
+		// Write API key to env file
+		if err := opencode.WriteEnvVarToFile("RUNPOD_API_KEY", cfg.RunpodAPIKey, envFilePath); err == nil {
 			envFileUpdated = true
 		}
 

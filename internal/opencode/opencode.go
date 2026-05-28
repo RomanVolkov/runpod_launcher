@@ -152,12 +152,26 @@ func providerDisplayName(providerName string) string {
 // WriteEnvVar writes or updates an environment variable in the ~/.env file.
 // If the variable already exists, its value is updated. Otherwise, it's appended.
 func WriteEnvVar(envVarName, envVarValue string) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
+	return WriteEnvVarToFile(envVarName, envVarValue, "~/.env")
+}
+
+// WriteEnvVarToFile writes or updates an environment variable in the specified file.
+// The path may use ~ for the home directory, which is expanded.
+// If the variable already exists, its value is updated. Otherwise, it's appended.
+func WriteEnvVarToFile(envVarName, envVarValue, envFilePath string) error {
+	// Expand ~ to home directory
+	var expandedPath string
+	if len(envFilePath) > 0 && envFilePath[0] == '~' {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		expandedPath = filepath.Join(homeDir, envFilePath[1:])
+	} else {
+		expandedPath = envFilePath
 	}
 
-	envPath := filepath.Join(homeDir, ".env")
+	envPath := expandedPath
 
 	// Read existing content
 	content, err := os.ReadFile(envPath)
