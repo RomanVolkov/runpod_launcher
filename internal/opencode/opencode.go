@@ -19,6 +19,18 @@ func UpdateConfig(path, baseURL, apiKey, modelName string) error {
 // This enables updating either the "runpod" provider (for pods) or "runpod-serverless"
 // provider (for serverless endpoints) in the same config file.
 func UpdateConfigWithProvider(path, baseURL, apiKey, modelName, providerName string) error {
+	return updateConfigWithProvider(path, baseURL, apiKey, modelName, providerName, "")
+}
+
+// UpdateConfigWithProviderAndEnv is like UpdateConfigWithProvider but uses an environment
+// variable reference for the API key instead of the literal key. This keeps sensitive
+// credentials out of the config file while still allowing it to be committed to version control.
+// The apiKeyEnvVar should be the environment variable name (e.g. "RUNPOD_API_KEY").
+func UpdateConfigWithProviderAndEnv(path, baseURL, modelName, providerName, apiKeyEnvVar string) error {
+	return updateConfigWithProvider(path, baseURL, "", modelName, providerName, apiKeyEnvVar)
+}
+
+func updateConfigWithProvider(path, baseURL, apiKey, modelName, providerName, apiKeyEnvVar string) error {
 	// Expand ~ to home directory
 	var expandedPath string
 	if len(path) > 0 && path[0] == '~' {
@@ -96,7 +108,13 @@ func UpdateConfigWithProvider(path, baseURL, apiKey, modelName, providerName str
 	// Set baseURL and apiKey (both under options)
 	// Note: apiKey uses camelCase (not snake_case) per OpenCode provider spec
 	options["baseURL"] = baseURL
-	options["apiKey"] = apiKey
+
+	// Use either the literal API key or an environment variable reference
+	if apiKeyEnvVar != "" {
+		options["apiKey"] = "{env:" + apiKeyEnvVar + "}"
+	} else {
+		options["apiKey"] = apiKey
+	}
 
 	// Marshal with indent
 	jsonData, err := json.MarshalIndent(config, "", "  ")
@@ -129,4 +147,90 @@ func providerDisplayName(providerName string) string {
 	default:
 		return providerName
 	}
+}
+
+// WriteEnvVar writes or updates an environment variable in the ~/.env file.
+// If the variable already exists, its value is updated. Otherwise, it's appended.
+func WriteEnvVar(envVarName, envVarValue string) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	envPath := filepath.Join(homeDir, ".env")
+
+	// Read existing content
+	content, err := os.ReadFile(envPath)
+	var lines []string
+	if err == nil {
+		lines = parseEnvLines(string(content))
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	// Update or add the variable
+	found := false
+	for i, line := range lines {
+		if parseEnvVarName(line) == envVarName {
+			lines[i] = envVarName + "=" + envVarValue
+			found = true
+			break
+		}
+	}
+	if !found {
+		lines = append(lines, envVarName+"="+envVarValue)
+	}
+
+	// Write back
+	newContent := ""
+	for _, line := range lines {
+		if line != "" {
+			newContent += line + "\n"
+		}
+	}
+
+	return os.WriteFile(envPath, []byte(newContent), 0o600)
+}
+
+// parseEnvLines splits content into individual lines, preserving comments and blank lines
+func parseEnvLines(content string) []string {
+	var lines []string
+	for _, line := range splitLines(content) {
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+// parseEnvVarName extracts the variable name from a line like "VAR_NAME=value"
+func parseEnvVarName(line string) string {
+	trimmed := line
+	// Skip comments and blank lines
+	if trimmed == "" || trimmed[0] == '#' {
+		return ""
+	}
+	// Find the equals sign
+	for i, ch := range trimmed {
+		if ch == '=' {
+			return trimmed[:i]
+		}
+	}
+	return ""
+}
+
+// splitLines splits content by newlines, preserving blank lines
+func splitLines(content string) []string {
+	var lines []string
+	var current string
+	for _, ch := range content {
+		if ch == '\n' {
+			lines = append(lines, current)
+			current = ""
+		} else {
+			current += string(ch)
+		}
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	return lines
 }

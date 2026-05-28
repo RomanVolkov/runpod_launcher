@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/romanvolkov/runpod-launcher/internal/config"
+	"github.com/romanvolkov/runpod-launcher/internal/opencode"
 	"github.com/romanvolkov/runpod-launcher/internal/serverless"
 )
 
@@ -98,11 +99,37 @@ func serverlessBaseURL(endpointID string) string {
 func printServerlessUpResult(cmd *cobra.Command, asJSON bool, endpointID string, alreadyExists bool, cfg *config.Config) error {
 	url := serverlessBaseURL(endpointID)
 
+	openCodeUpdated := false
+	envFileUpdated := false
+
+	// Get the OpenCode config path
+	openCodePath := cfg.OpenCodeConfigPath
+
+	// Update OpenCode config with env var reference and write API key to ~/.env
+	if openCodePath != "" {
+		modelName := cfg.ServerlessModelName
+		if modelName == "" {
+			modelName = cfg.ModelName
+		}
+
+		// Write API key to ~/.env
+		if err := opencode.WriteEnvVar("RUNPOD_API_KEY", cfg.RunpodAPIKey); err == nil {
+			envFileUpdated = true
+		}
+
+		// Update OpenCode config with env var reference (not the real key)
+		if err := opencode.UpdateConfigWithProviderAndEnv(openCodePath, url, modelName, "runpod-serverless", "RUNPOD_API_KEY"); err == nil {
+			openCodeUpdated = true
+		}
+	}
+
 	if asJSON {
 		out := map[string]interface{}{
-			"status":      serverless.StatusActive,
-			"endpoint_id": endpointID,
-			"url":         url,
+			"status":           serverless.StatusActive,
+			"endpoint_id":      endpointID,
+			"url":              url,
+			"opencode_updated": openCodeUpdated,
+			"env_updated":      envFileUpdated,
 		}
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetEscapeHTML(false)
@@ -114,6 +141,16 @@ func printServerlessUpResult(cmd *cobra.Command, asJSON bool, endpointID string,
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "Serverless endpoint created: %s\nURL: %s\n", endpointID, url)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Configure OpenCode manually with:\n  URL: %s\n  API Key: <your-runpod-api-key>\n  Model: %s\n", url, "runpod-serverless")
+
+	if openCodeUpdated && envFileUpdated {
+		fmt.Fprintf(cmd.OutOrStdout(), "✓ OpenCode config updated (URL: %s)\n", openCodePath)
+		fmt.Fprintf(cmd.OutOrStdout(), "✓ API key written to ~/.env as RUNPOD_API_KEY\n")
+	} else if !openCodeUpdated || !envFileUpdated {
+		fmt.Fprintf(cmd.OutOrStdout(), "Configure OpenCode with:\n  URL: %s\n  API Key: {env:RUNPOD_API_KEY}\n  Model: %s\n", url, "runpod-serverless")
+		if !envFileUpdated {
+			fmt.Fprintf(cmd.OutOrStdout(), "Add to ~/.env: RUNPOD_API_KEY=%s\n", cfg.RunpodAPIKey)
+		}
+	}
+
 	return nil
 }
