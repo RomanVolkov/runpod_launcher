@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // UpdateConfig reads the OpenCode JSON config file at path, updates the
@@ -195,10 +196,13 @@ func WriteEnvVarToFile(envVarName, envVarValue, envFilePath string) error {
 		lines = append(lines, envVarName+"="+envVarValue)
 	}
 
-	// Write back
+	// Write back with export statements so variables are available to child processes
 	newContent := ""
 	for _, line := range lines {
-		if line != "" {
+		if line != "" && !startsWithExport(line) && !isComment(line) && parseEnvVarName(line) != "" {
+			// Add 'export' prefix if it's a variable assignment without it
+			newContent += "export " + line + "\n"
+		} else {
 			newContent += line + "\n"
 		}
 	}
@@ -215,13 +219,20 @@ func parseEnvLines(content string) []string {
 	return lines
 }
 
-// parseEnvVarName extracts the variable name from a line like "VAR_NAME=value"
+// parseEnvVarName extracts the variable name from a line like "VAR_NAME=value" or "export VAR_NAME=value"
 func parseEnvVarName(line string) string {
 	trimmed := line
 	// Skip comments and blank lines
 	if trimmed == "" || trimmed[0] == '#' {
 		return ""
 	}
+
+	// Skip "export " prefix if present
+	if startsWithExport(trimmed) {
+		trimmed = trimmed[7:] // len("export ") == 7
+		trimmed = strings.TrimSpace(trimmed)
+	}
+
 	// Find the equals sign
 	for i, ch := range trimmed {
 		if ch == '=' {
@@ -229,6 +240,17 @@ func parseEnvVarName(line string) string {
 		}
 	}
 	return ""
+}
+
+// startsWithExport checks if a line starts with "export "
+func startsWithExport(line string) bool {
+	return len(line) > 7 && line[:7] == "export " && line[7] != '='
+}
+
+// isComment checks if a line is a comment
+func isComment(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return trimmed == "" || trimmed[0] == '#'
 }
 
 // splitLines splits content by newlines, preserving blank lines
