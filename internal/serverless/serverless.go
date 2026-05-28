@@ -190,11 +190,11 @@ func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiK
 
 	// For Ollama, add startup script to:
 	// 1. Start socat reverse proxy (8000 → 11434)
-	// 2. Start Ollama
-	// 3. Pull the model so it's ready when requests come in
+	// 2. Pull the model in background so it's ready
+	// 3. Let default entrypoint run ollama serve
 	if isOllamaImage(imageName) {
 		startCmd := fmt.Sprintf(
-			"socat TCP-LISTEN:8000,reuseaddr,fork TCP:localhost:11434 & sleep 1 && /bin/ollama serve & OLLAMA_PID=$! && sleep 3 && /bin/ollama pull %s && wait $OLLAMA_PID",
+			"socat TCP-LISTEN:8000,reuseaddr,fork TCP:localhost:11434 & sleep 2 && /bin/ollama pull %s &",
 			modelName,
 		)
 		args = append(args,
