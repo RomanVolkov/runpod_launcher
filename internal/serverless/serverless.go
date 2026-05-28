@@ -188,17 +188,17 @@ func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiK
 		"--env", string(envJSON),
 	}
 
-	// For Ollama, add startup script to:
-	// 1. Start socat reverse proxy (8000 → 11434)
-	// 2. Pull the model in background so it's ready
-	// 3. Let default entrypoint run ollama serve
+	// For Ollama, add entrypoint script that:
+	// 1. Starts socat reverse proxy (8000 → 11434) in background
+	// 2. Pulls the model in background
+	// 3. Runs ollama serve as main process
 	if isOllamaImage(imageName) {
 		startCmd := fmt.Sprintf(
-			"socat TCP-LISTEN:8000,reuseaddr,fork TCP:localhost:11434 & sleep 2 && /bin/ollama pull %s &",
+			"sh,-c,socat TCP-LISTEN:8000,reuseaddr,fork TCP:localhost:11434 &  sleep 2 && /bin/ollama pull %s & exec /bin/ollama serve",
 			modelName,
 		)
 		args = append(args,
-			"--docker-start-cmd", startCmd,
+			"--docker-entrypoint", startCmd,
 		)
 	}
 
