@@ -163,7 +163,8 @@ func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiK
 	env := map[string]string{}
 	if isOllamaImage(imageName) {
 		// Ollama-specific: listen on port 8000 (serverless expects port 8000)
-		env["OLLAMA_HOST"] = "0.0.0.0:8000"
+		// Format must include protocol: http://host:port
+		env["OLLAMA_HOST"] = "http://0.0.0.0:8000"
 		// Set model to pull (format: modelname:tag, e.g. gemma4:latest)
 		env["OLLAMA_MODEL"] = modelName
 	} else {
