@@ -59,21 +59,16 @@ func executeServerlessUpDirect(t *testing.T, configPath string, jsonFlag bool) (
 
 	origCfgFile := cfgFile
 	origServerlessUpJSON := serverlessUpJSON
-	origServerlessUpOpenCodeConfig := serverlessUpOpenCodeConfig
 	origNewServerlessClient := newServerlessClient
-	origUpdateServerlessOpenCodeConfig := updateServerlessOpenCodeConfig
 
 	t.Cleanup(func() {
 		cfgFile = origCfgFile
 		serverlessUpJSON = origServerlessUpJSON
-		serverlessUpOpenCodeConfig = origServerlessUpOpenCodeConfig
 		newServerlessClient = origNewServerlessClient
-		updateServerlessOpenCodeConfig = origUpdateServerlessOpenCodeConfig
 	})
 
 	cfgFile = configPath
 	serverlessUpJSON = jsonFlag
-	serverlessUpOpenCodeConfig = ""
 
 	var stdout bytes.Buffer
 	serverlessUpCmd.SetOut(&stdout)
