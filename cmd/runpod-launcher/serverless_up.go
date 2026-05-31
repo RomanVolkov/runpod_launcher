@@ -61,12 +61,18 @@ func runServerlessUp(cmd *cobra.Command, args []string) error {
 		return printServerlessUpResult(cmd, serverlessUpJSON, existing.ID, true, cfg)
 	}
 
-	// Create template
+	// Create template with vLLM options
 	diskGB := cfg.ContainerDiskGB
 	if diskGB == 0 {
 		diskGB = 50
 	}
-	templateID, err := client.CreateTemplate(endpointName, imageName, modelName, cfg.RunpodAPIKey, diskGB)
+	// Build vLLM template options from config
+	opts := &serverless.VLLMTemplateOptions{
+		MaxModelLen:   cfg.ServerlessMaxModelLen,
+		Dtype:         cfg.ServerlessDtype,
+		GpuMemoryUtil: cfg.ServerlessGpuMemoryUtilization,
+	}
+	templateID, err := client.CreateTemplate(endpointName, imageName, modelName, diskGB, opts)
 	if err != nil {
 		return fmt.Errorf("failed to create serverless template: %w", err)
 	}

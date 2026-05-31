@@ -35,11 +35,14 @@ type Config struct {
 	EnvFilePath        string            `toml:"env_file_path"`
 	EnvVars            map[string]string `toml:"env_vars"`
 
-	ServerlessImageName    string `toml:"serverless_image_name"`
-	ServerlessEndpointName string `toml:"serverless_endpoint_name"`
-	ServerlessWorkersMax   int    `toml:"serverless_workers_max"`
-	ServerlessGPUTypeID    string `toml:"serverless_gpu_type_id"`
-	ServerlessModelName    string `toml:"serverless_model_name"`
+	ServerlessImageName            string  `toml:"serverless_image_name"`
+	ServerlessEndpointName         string  `toml:"serverless_endpoint_name"`
+	ServerlessWorkersMax           int     `toml:"serverless_workers_max"`
+	ServerlessGPUTypeID            string  `toml:"serverless_gpu_type_id"`
+	ServerlessModelName            string  `toml:"serverless_model_name"`
+	ServerlessMaxModelLen          int     `toml:"serverless_max_model_len"`
+	ServerlessDtype                string  `toml:"serverless_dtype"`
+	ServerlessGpuMemoryUtilization float64 `toml:"serverless_gpu_memory_utilization"`
 
 	// configPath is stored but not serialized - used by SaveAPIKey
 	configPath string

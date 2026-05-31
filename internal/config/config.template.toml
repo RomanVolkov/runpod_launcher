@@ -96,6 +96,30 @@ serverless_workers_max = 0
 # Leave empty to use the pod's model_name field
 serverless_model_name = ""
 
+# vLLM-specific configuration for serverless endpoint (all optional)
+
+# Maximum model context length in tokens (limits KV cache)
+# Recommended values:
+#   - Qwen3.5-27B on H100: 32000 (default is 128K, too large for batch processing)
+#   - Llama2-70b on H100: 4096 (default is 4096)
+#   - General: set 25-50% of model's default context for safe batch processing
+# Leave at 0 to use the model's default
+serverless_max_model_len = 0
+
+# Model weight precision (bfloat16, float16, float32)
+# bfloat16: 16-bit floating point with better numerical stability, good for most models
+# float16:  faster but less stable, may cause precision issues on some models
+# float32:  high quality but uses 2x VRAM, slower
+# Default: bfloat16 (recommended balance of quality and memory)
+serverless_dtype = ""
+
+# GPU memory utilization ratio (0.0 to 1.0)
+# Determines how much of the GPU's available VRAM is allocated for the model
+# Example: 0.85 = use 85% of VRAM, reserve 15% for batch processing and overhead
+# Recommended: 0.8-0.9 for large models on high-memory GPUs like H100
+# Default: 0.85
+serverless_gpu_memory_utilization = 0.0
+
 # Optional extra environment variables to inject into the pod
 # [env_vars]
 # MY_VAR = "value"

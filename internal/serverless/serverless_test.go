@@ -89,7 +89,7 @@ func TestCreateTemplate_ReturnsID(t *testing.T) {
 	})
 
 	client := newTestClient()
-	id, err := client.CreateTemplate("test", "runpod/worker-vllm:latest", "meta/llama3:8b", "hf-key", 50)
+	id, err := client.CreateTemplate("test", "runpod/worker-v1-vllm:stable-cuda12.1.0", "meta-llama/Llama-2-8b", 50, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestCreateTemplate_ArgsContainServerless(t *testing.T) {
 	})
 
 	client := newTestClient()
-	_, _ = client.CreateTemplate("test", "image", "model", "key", 50)
+	_, _ = client.CreateTemplate("test", "image", "model", 50, nil)
 
 	found := false
 	for _, a := range capturedArgs {
@@ -216,7 +216,7 @@ func TestCLIError_SurfacesAsError(t *testing.T) {
 	})
 
 	client := newTestClient()
-	_, err := client.CreateTemplate("test", "image", "model", "key", 50)
+	_, err := client.CreateTemplate("test", "image", "model", 50, nil)
 	if err == nil {
 		t.Fatal("expected error from CLI failure")
 	}

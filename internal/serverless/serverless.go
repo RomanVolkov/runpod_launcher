@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 )
 
 const (
 	DefaultEndpointName = "llm-launcher-serverless"
-	DefaultImageName    = "runpod/worker-vllm:stable-cuda12.1.0"
+	DefaultImageName    = "runpod/worker-v1-vllm:stable-cuda12.1.0"
 	DefaultWorkersMax   = 3
 	DefaultIdleTimeout  = 5
 	DefaultScalerType   = "QUEUE_DELAY"
@@ -26,9 +25,15 @@ type Endpoint struct {
 	WorkersMax int
 }
 
+type VLLMTemplateOptions struct {
+	MaxModelLen       int
+	Dtype             string
+	GpuMemoryUtil     float64
+}
+
 type Client interface {
 	FindEndpointByName(name string) (*Endpoint, error)
-	CreateTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error)
+	CreateTemplate(name, imageName, modelName string, containerDiskGB int, opts *VLLMTemplateOptions) (string, error)
 	CreateEndpoint(name, gpuID, templateID string, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error)
 	ScaleToZero(endpointID string) error
 	DeleteEndpoint(endpointID string) error
@@ -116,7 +121,9 @@ func (c *RunPodServerlessClient) findTemplateByName(name string) (*map[string]js
 	return nil, nil
 }
 
-func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiKey string, containerDiskGB int) (string, error) {
+func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName string, containerDiskGB int, opts *VLLMTemplateOptions) (string, error) {
+	// modelName must be a HuggingFace model ID (e.g., "Qwen/Qwen3.5-27B", "meta-llama/Llama-2-70b")
+	// This differs from pods which use Ollama format (e.g., "qwen3.6:27b")
 	// Check if template exists and has correct MODEL_NAME
 	existing, err := c.findTemplateByName(name)
 	if err != nil {
@@ -159,18 +166,22 @@ func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiK
 		}
 	}
 
-	// Build environment variables based on image type
-	env := map[string]string{}
-	if isOllamaImage(imageName) {
-		// Ollama-specific: listen on port 8000 (serverless expects port 8000)
-		// Format must include protocol: http://host:port
-		env["OLLAMA_HOST"] = "http://0.0.0.0:8000"
-		// Set model to pull (format: modelname:tag, e.g. gemma4:latest)
-		env["OLLAMA_MODEL"] = modelName
-	} else {
-		// vLLM or other frameworks: use MODEL_NAME format (HuggingFace repo IDs)
-		env["MODEL_NAME"] = modelName
-		env["HF_TOKEN"] = apiKey
+	// Build environment variables for vLLM (HuggingFace model format)
+	env := map[string]string{
+		"MODEL_NAME": modelName,
+	}
+
+	// Add optional vLLM configuration
+	if opts != nil {
+		if opts.MaxModelLen > 0 {
+			env["MAX_MODEL_LEN"] = fmt.Sprintf("%d", opts.MaxModelLen)
+		}
+		if opts.Dtype != "" {
+			env["DTYPE"] = opts.Dtype
+		}
+		if opts.GpuMemoryUtil > 0 {
+			env["GPU_MEMORY_UTILIZATION"] = fmt.Sprintf("%.2f", opts.GpuMemoryUtil)
+		}
 	}
 
 	envJSON, err := json.Marshal(env)
@@ -188,30 +199,12 @@ func (c *RunPodServerlessClient) CreateTemplate(name, imageName, modelName, apiK
 		"--env", string(envJSON),
 	}
 
-	// For Ollama, add entrypoint script that:
-	// 1. Starts socat reverse proxy (8000 → 11434) in background
-	// 2. Pulls the model in background
-	// 3. Runs ollama serve as main process
-	if isOllamaImage(imageName) {
-		startCmd := fmt.Sprintf(
-			"sh,-c,socat TCP-LISTEN:8000,reuseaddr,fork TCP:localhost:11434 &  sleep 2 && /bin/ollama pull %s & exec /bin/ollama serve",
-			modelName,
-		)
-		args = append(args,
-			"--docker-entrypoint", startCmd,
-		)
-	}
-
 	out, err := RunpodCtlFn(c.apiKey, args...)
 	if err != nil {
 		return "", fmt.Errorf("runpodctl template create: %w\n%s", err, out)
 	}
 
 	return parseID(out)
-}
-
-func isOllamaImage(imageName string) bool {
-	return strings.Contains(imageName, "ollama")
 }
 
 func (c *RunPodServerlessClient) CreateEndpoint(name, gpuID, templateID string, workersMax, idleTimeout, scalerValue int, scalerType string) (string, error) {
