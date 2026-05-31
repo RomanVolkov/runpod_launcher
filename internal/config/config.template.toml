@@ -85,6 +85,12 @@ serverless_endpoint_name = ""
 # Only used by 'serverless up' command
 serverless_workers_max = 0
 
+# Container disk size in GB for serverless endpoint (default: 50)
+# Increase this if using large models that need space for weights
+# Example: Qwen3.5-27B needs ~5.3GB for weights + ~10GB working space = 100GB recommended
+# Only used by 'serverless up' command
+serverless_container_disk_gb = 0
+
 # GPU type for serverless endpoint (default: NVIDIA A100-SXM4-80GB)
 # Must be compatible with CUDA 12.1 — RTX 5090 (Blackwell) is NOT compatible
 # Use 'runpod-launcher availability' to see GPU IDs and pricing

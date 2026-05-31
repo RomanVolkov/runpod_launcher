@@ -62,7 +62,7 @@ func runServerlessUp(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create template with vLLM options
-	diskGB := cfg.ContainerDiskGB
+	diskGB := cfg.ServerlessContainerDiskGB
 	if diskGB == 0 {
 		diskGB = 50
 	}
