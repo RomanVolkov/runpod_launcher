@@ -82,6 +82,11 @@ func runUp(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Pre-flight check: validate GPU is available before attempting to create
+	if err := validateGPUAvailable(cmd, client, cfg); err != nil {
+		return err
+	}
+
 	podID, err := client.CreatePod(cfg, llmAPIKey)
 	if err != nil {
 		return fmt.Errorf("failed to create pod: %w", err)
@@ -117,6 +122,40 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 
 	return printUpResult(cmd, upJSON, podID, false, cfg, llmAPIKey)
+}
+
+// validateGPUAvailable checks that the configured GPU is available in secure cloud.
+// Returns a helpful error message if the GPU is not available, suggesting the user
+// run the availability command to see what's deployable.
+func validateGPUAvailable(cmd *cobra.Command, client pod.PodClient, cfg *config.Config) error {
+	gpuTypes, err := client.GetGPUTypes()
+	if err != nil {
+		// Don't fail on availability check - just warn and continue
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not validate GPU availability: %v\n", err)
+		return nil
+	}
+
+	for _, gpu := range gpuTypes {
+		if gpu.ID == cfg.GPUTypeID && gpu.SecureCloud {
+			if gpu.MaxGpuCountSecureCloud > 0 {
+				// GPU is available in secure cloud
+				return nil
+			}
+			// GPU is listed but has zero availability
+			return fmt.Errorf(
+				"GPU %q is currently unavailable (zero capacity in secure cloud). "+
+					"Run 'runpod-launcher availability' to see deployable GPUs",
+				cfg.GPUTypeID,
+			)
+		}
+	}
+
+	// GPU not found in list at all
+	return fmt.Errorf(
+		"GPU %q not found in secure cloud inventory. "+
+			"Run 'runpod-launcher availability' to see deployable GPUs",
+		cfg.GPUTypeID,
+	)
 }
 
 // podProxyURL returns the RunPod proxy URL for the given pod ID and port.

@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/romanvolkov/runpod-launcher/internal/config"
 	"github.com/romanvolkov/runpod-launcher/internal/pod"
 )
@@ -642,5 +644,159 @@ opencode_config_path = "/tmp/config.json"
 	expected := "https://pod-abc123-8000.proxy.runpod.net/v1"
 	if updateURL != expected {
 		t.Errorf("expected URL %q, got %q", expected, updateURL)
+	}
+}
+
+// TestValidateGPUAvailable_Success tests that validateGPUAvailable succeeds when
+// the requested GPU is in the secure cloud list with available capacity.
+func TestValidateGPUAvailable_Success(t *testing.T) {
+	cfg := &config.Config{
+		GPUTypeID: "AMPERE_16",
+	}
+
+	mock := &mockClient{
+		getGPUTypesFn: func() ([]pod.GPUType, error) {
+			return []pod.GPUType{
+				{
+					ID:                     "AMPERE_16",
+					DisplayName:            "NVIDIA A100",
+					MemoryInGb:             80,
+					SecureCloud:            true,
+					MaxGpuCountSecureCloud: 5,
+				},
+			}, nil
+		},
+	}
+
+	cmd := &cobra.Command{}
+	err := validateGPUAvailable(cmd, mock, cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+}
+
+// TestValidateGPUAvailable_ZeroCapacity tests that validateGPUAvailable returns
+// a helpful error when the GPU has zero capacity in secure cloud.
+func TestValidateGPUAvailable_ZeroCapacity(t *testing.T) {
+	cfg := &config.Config{
+		GPUTypeID: "AMPERE_16",
+	}
+
+	mock := &mockClient{
+		getGPUTypesFn: func() ([]pod.GPUType, error) {
+			return []pod.GPUType{
+				{
+					ID:                     "AMPERE_16",
+					DisplayName:            "NVIDIA A100",
+					MemoryInGb:             80,
+					SecureCloud:            true,
+					MaxGpuCountSecureCloud: 0,
+				},
+			}, nil
+		},
+	}
+
+	cmd := &cobra.Command{}
+	err := validateGPUAvailable(cmd, mock, cfg)
+	if err == nil {
+		t.Fatal("expected error for zero capacity, got nil")
+	}
+	if !strings.Contains(err.Error(), "currently unavailable") {
+		t.Errorf("expected 'currently unavailable' in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "availability") {
+		t.Errorf("expected suggestion to run 'availability' in error, got: %v", err)
+	}
+}
+
+// TestValidateGPUAvailable_NotFound tests that validateGPUAvailable returns
+// a helpful error when the GPU is not in the secure cloud list.
+func TestValidateGPUAvailable_NotFound(t *testing.T) {
+	cfg := &config.Config{
+		GPUTypeID: "MISSING_GPU",
+	}
+
+	mock := &mockClient{
+		getGPUTypesFn: func() ([]pod.GPUType, error) {
+			return []pod.GPUType{
+				{
+					ID:                     "AMPERE_16",
+					DisplayName:            "NVIDIA A100",
+					MemoryInGb:             80,
+					SecureCloud:            true,
+					MaxGpuCountSecureCloud: 5,
+				},
+			}, nil
+		},
+	}
+
+	cmd := &cobra.Command{}
+	err := validateGPUAvailable(cmd, mock, cfg)
+	if err == nil {
+		t.Fatal("expected error for missing GPU, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "availability") {
+		t.Errorf("expected suggestion to run 'availability' in error, got: %v", err)
+	}
+}
+
+// TestValidateGPUAvailable_CommunityCloud tests that validateGPUAvailable rejects
+// GPUs that are only in community cloud, not secure cloud.
+func TestValidateGPUAvailable_CommunityCloud(t *testing.T) {
+	cfg := &config.Config{
+		GPUTypeID: "COMMUNITY_GPU",
+	}
+
+	mock := &mockClient{
+		getGPUTypesFn: func() ([]pod.GPUType, error) {
+			return []pod.GPUType{
+				{
+					ID:                        "COMMUNITY_GPU",
+					DisplayName:               "Community GPU",
+					MemoryInGb:                40,
+					SecureCloud:               false, // Not in secure cloud
+					CommunityCloud:            true,
+					MaxGpuCountSecureCloud:    0,
+					MaxGpuCountCommunityCloud: 10,
+				},
+			}, nil
+		},
+	}
+
+	cmd := &cobra.Command{}
+	err := validateGPUAvailable(cmd, mock, cfg)
+	if err == nil {
+		t.Fatal("expected error for community-only GPU, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' in error, got: %v", err)
+	}
+}
+
+// TestValidateGPUAvailable_QueryError tests that validateGPUAvailable gracefully
+// handles errors from GetGPUTypes and allows deployment to proceed (retry at pod creation).
+func TestValidateGPUAvailable_QueryError(t *testing.T) {
+	cfg := &config.Config{
+		GPUTypeID: "AMPERE_16",
+	}
+
+	mock := &mockClient{
+		getGPUTypesFn: func() ([]pod.GPUType, error) {
+			return nil, errors.New("API rate limited")
+		},
+	}
+
+	cmd := &cobra.Command{}
+	var stderr bytes.Buffer
+	cmd.SetErr(&stderr)
+	err := validateGPUAvailable(cmd, mock, cfg)
+	if err != nil {
+		t.Fatalf("expected no error on query failure (graceful), got: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "warning") {
+		t.Errorf("expected warning on stderr, got: %s", stderr.String())
 	}
 }

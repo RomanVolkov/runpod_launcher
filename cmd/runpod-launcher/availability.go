@@ -139,6 +139,9 @@ func runAvailability(cmd *cobra.Command, args []string) error {
 	}
 	w.Flush()
 
-	fmt.Fprintf(cmd.OutOrStdout(), "\nThese GPUs are deployable with your current constraints. Use with: runpod-launcher up\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "\nThese GPUs are available (based on current inventory). "+
+		"Note: Availability counts can change rapidly.\n"+
+		"The 'up' command will validate GPU availability at deployment time.\n"+
+		"Use with: runpod-launcher up\n")
 	return nil
 }
