@@ -69,14 +69,14 @@ func TestGetOllamaModelContext_Llama31(t *testing.T) {
 	}
 }
 
-// TestGetOllamaModelContext_Qwen36 tests that qwen3.6:27b returns correct context.
+// TestGetOllamaModelContext_Qwen36 tests that qwen3.6:27b returns maximum context window.
 func TestGetOllamaModelContext_Qwen36(t *testing.T) {
 	ctx, err := GetOllamaModelContext("qwen3.6:27b")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	const expectedQwen36Context = 32768
+	const expectedQwen36Context = 262144
 	if ctx != expectedQwen36Context {
 		t.Errorf("qwen3.6:27b: expected %d tokens, got %d", expectedQwen36Context, ctx)
 	}

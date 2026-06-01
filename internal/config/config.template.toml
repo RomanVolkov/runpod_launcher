@@ -26,7 +26,7 @@ image_name = "ollama/ollama:latest"
 model_name = "qwen3.6:27b"
 
 # Container disk size in GB
-container_disk_gb = 50
+container_disk_gb = 150
 
 # Path inside the container where a volume is mounted
 volume_mount_path = "/workspace"
@@ -46,7 +46,7 @@ max_model_len = 0
 # Leave at 0 to use auto-detection based on model name
 # Auto-detection uses Ollama's official model specs: gemma4=262K, llama3.1=128K, mistral=32K, etc.
 # NOTE: Larger context uses more VRAM; verify your GPU has sufficient memory
-ollama_context_len = 0
+ollama_context_len = 262144
 
 # Tool call parser for auto tool choice
 # Enable automatic tool calling for models that support it
