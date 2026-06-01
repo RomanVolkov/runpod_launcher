@@ -22,6 +22,7 @@ image_name = "ollama/ollama:latest"
 
 # LLM model to serve (required)
 # For Ollama: use format "modelname:tag" (e.g., "qwen3.6:27b", "mistral:latest")
+#   Note: Ollama typically uses optimized quantization by default based on available VRAM
 # For vLLM: use full model ID (e.g., "google/gemma-4-31b-it", "qwen/qwen3.5-9b")
 model_name = "qwen3.6:27b"
 
@@ -40,13 +41,14 @@ max_model_len = 0
 # Ollama context window in tokens (OLLAMA_CONTEXT_LENGTH override)
 # Set this to override the auto-detected context length for Ollama
 # Examples:
-#   - Set to 262144 for full context on large GPUs (>= 48 GiB VRAM)
-#   - Set to 32768 for safe operation on medium GPUs (24-48 GiB VRAM)
+#   - Set to 262144 (256K) for full context on high-end GPUs with optimization
+#   - Set to 131072 (128K) for balanced performance on H100 with 8-bit quantization
+#   - Set to 32768 (32K) for safe operation on medium GPUs (24-48 GiB VRAM)
 #   - Set to 8192 for limited memory scenarios
 # Leave at 0 to use auto-detection based on model name
 # Auto-detection uses Ollama's official model specs: gemma4=262K, llama3.1=128K, mistral=32K, etc.
 # NOTE: Larger context uses more VRAM; verify your GPU has sufficient memory
-ollama_context_len = 262144
+ollama_context_len = 131072
 
 # Tool call parser for auto tool choice
 # Enable automatic tool calling for models that support it

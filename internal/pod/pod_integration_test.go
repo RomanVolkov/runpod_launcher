@@ -69,14 +69,15 @@ func TestGetOllamaModelContext_Llama31(t *testing.T) {
 	}
 }
 
-// TestGetOllamaModelContext_Qwen36 tests that qwen3.6:27b returns maximum context window.
+// TestGetOllamaModelContext_Qwen36 tests that qwen3.6:27b returns 128K context window.
 func TestGetOllamaModelContext_Qwen36(t *testing.T) {
 	ctx, err := GetOllamaModelContext("qwen3.6:27b")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	const expectedQwen36Context = 262144
+	// 128K context balances performance and memory usage on H100 with quantization
+	const expectedQwen36Context = 131072
 	if ctx != expectedQwen36Context {
 		t.Errorf("qwen3.6:27b: expected %d tokens, got %d", expectedQwen36Context, ctx)
 	}

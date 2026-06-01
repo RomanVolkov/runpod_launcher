@@ -345,7 +345,7 @@ func GetOllamaModelContext(modelName string) (int, error) {
 		"llama3":      8192,
 		"llama31":     131072,
 		"qwen":        32768,
-		"qwen36":      262144, // Qwen 3.6 models (e.g. qwen3.6:27b)
+		"qwen36":      131072, // Qwen 3.6 models (e.g. qwen3.6:27b) - 128K context with 8-bit quantization
 		"neural-chat": 4096,
 		"zephyr":      4096,
 		"openchat":    8192,
