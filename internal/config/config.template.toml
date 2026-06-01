@@ -73,9 +73,13 @@ opencode_config_path = ""
 env_file_path = ""
 
 # --- Serverless endpoint settings ---
-# Docker image for the serverless worker (default: runpod/worker-vllm:stable-cuda12.1.0)
+# Docker image for the serverless worker
+# Use the latest vLLM worker from RunPod:
+#   runpod/worker-vllm:latest
+# Or alternative stable version:
+#   runpod/worker-v1-vllm:v2.19.0
 # Only used by 'serverless up' command
-serverless_image_name = ""
+serverless_image_name = "runpod/worker-vllm:latest"
 
 # Name for the serverless endpoint in RunPod (default: llm-launcher-serverless)
 # Only used by 'serverless up' and 'serverless down' commands
@@ -86,44 +90,51 @@ serverless_endpoint_name = ""
 serverless_workers_max = 0
 
 # Container disk size in GB for serverless endpoint (default: 50)
-# Increase this if using large models that need space for weights
-# Example: Qwen3.5-27B needs ~5.3GB for weights + ~10GB working space = 100GB recommended
+# Required for large models - must fit model weights + vLLM runtime
+# Examples:
+#   - Qwen3.5-27B: 150GB (5.3GB weights + working space)
+#   - Llama2-70B: 150GB
+#   - Smaller models (7B-13B): 50-70GB
 # Only used by 'serverless up' command
-serverless_container_disk_gb = 0
+serverless_container_disk_gb = 150
 
 # GPU type for serverless endpoint (default: NVIDIA A100-SXM4-80GB)
 # Must be compatible with CUDA 12.1 — RTX 5090 (Blackwell) is NOT compatible
 # Use 'runpod-launcher availability' to see GPU IDs and pricing
-# serverless_gpu_type_id = "NVIDIA A100-SXM4-80GB"
+# serverless_gpu_type_id = "NVIDIA H100 80GB HBM3"
 
-# Model name for serverless endpoint (HuggingFace format, e.g., "Qwen/Qwen3-32B")
+# Model name for serverless endpoint (HuggingFace format, lowercase repo ID)
+# Examples: "qwen/qwen3.5-27b", "meta-llama/llama-2-70b", "mistralai/mistral-7b"
 # If set, overrides the pod's model_name for serverless deployment
-# Ollama models use "modelname:tag" format for pods; vLLM serverless uses HuggingFace repo IDs
+# Serverless MUST use HuggingFace format (not Ollama "modelname:tag" format)
 # Leave empty to use the pod's model_name field
 serverless_model_name = ""
 
 # vLLM-specific configuration for serverless endpoint (all optional)
 
 # Maximum model context length in tokens (limits KV cache)
-# Recommended values:
-#   - Qwen3.5-27B on H100: 32000 (default is 128K, too large for batch processing)
-#   - Llama2-70b on H100: 4096 (default is 4096)
-#   - General: set 25-50% of model's default context for safe batch processing
-# Leave at 0 to use the model's default
+# Set to 0 to use the model's default maximum context
+# Limiting context can reduce VRAM usage but may hurt quality on long inputs
+# Examples:
+#   - 0: Use model default (Qwen3.5-27B default is 128K)
+#   - 32000: Reasonable limit for batch processing on large models
+#   - 4096: Conservative limit for memory-constrained setups
 serverless_max_model_len = 0
 
 # Model weight precision (bfloat16, float16, float32)
-# bfloat16: 16-bit floating point with better numerical stability, good for most models
-# float16:  faster but less stable, may cause precision issues on some models
-# float32:  high quality but uses 2x VRAM, slower
-# Default: bfloat16 (recommended balance of quality and memory)
+# bfloat16: 16-bit with good numerical stability (RECOMMENDED for most models)
+# float16:  faster but less stable, may cause precision issues
+# float32:  highest quality but uses 2x VRAM, slower inference
+# Leave empty for vLLM's auto-detection
 serverless_dtype = ""
 
 # GPU memory utilization ratio (0.0 to 1.0)
-# Determines how much of the GPU's available VRAM is allocated for the model
-# Example: 0.85 = use 85% of VRAM, reserve 15% for batch processing and overhead
-# Recommended: 0.8-0.9 for large models on high-memory GPUs like H100
-# Default: 0.85
+# Higher = more VRAM allocated to model, less for batching
+# Examples:
+#   - 0.95: Use 95% of VRAM (aggressive, good for single requests)
+#   - 0.85: Use 85% of VRAM (balanced for batch processing)
+#   - 0.70: Use 70% of VRAM (conservative, better concurrency)
+# Leave at 0 for vLLM's default (0.9)
 serverless_gpu_memory_utilization = 0.0
 
 # Optional extra environment variables to inject into the pod
