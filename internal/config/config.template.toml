@@ -69,73 +69,7 @@ opencode_config_path = ""
 
 # Optional: path to .env file for storing credentials (e.g. ~/.env)
 # Leave empty to use ~/.env by default
-# Used by serverless endpoint to securely store API keys
 env_file_path = ""
-
-# --- Serverless endpoint settings ---
-# Docker image for the serverless worker
-# Official RunPod vLLM worker: runpod/worker-v1-vllm:v2.19.0
-# vLLM version: 0.20.2
-# Repository: https://github.com/runpod-workers/worker-vllm
-# See docs/configuration.md for all available environment variables
-# Only used by 'serverless up' command
-serverless_image_name = "runpod/worker-v1-vllm:v2.19.0"
-
-# Name for the serverless endpoint in RunPod (default: llm-launcher-serverless)
-# Only used by 'serverless up' and 'serverless down' commands
-serverless_endpoint_name = ""
-
-# Maximum number of concurrent workers for serverless endpoint (default: 3)
-# Only used by 'serverless up' command
-serverless_workers_max = 0
-
-# Container disk size in GB for serverless endpoint (default: 50)
-# Required for large models - must fit model weights + vLLM runtime
-# Examples:
-#   - Qwen3.5-27B: 150GB (5.3GB weights + working space)
-#   - Llama2-70B: 150GB
-#   - Smaller models (7B-13B): 50-70GB
-# Only used by 'serverless up' command
-serverless_container_disk_gb = 150
-
-# GPU type for serverless endpoint (default: NVIDIA A100-SXM4-80GB)
-# Must be compatible with CUDA 12.1 — RTX 5090 (Blackwell) is NOT compatible
-# Use 'runpod-launcher availability' to see GPU IDs and pricing
-# serverless_gpu_type_id = "NVIDIA H100 80GB HBM3"
-
-# Model name for serverless endpoint (HuggingFace format, lowercase repo ID)
-# Examples: "qwen/qwen3.5-27b", "meta-llama/llama-2-70b", "mistralai/mistral-7b"
-# If set, overrides the pod's model_name for serverless deployment
-# Serverless MUST use HuggingFace format (not Ollama "modelname:tag" format)
-# Leave empty to use the pod's model_name field
-serverless_model_name = ""
-
-# vLLM-specific configuration for serverless endpoint (all optional)
-
-# Maximum model context length in tokens (limits KV cache)
-# CRITICAL: Set this conservatively to avoid OOM during initialization
-# KV cache is the biggest memory consumer during batch processing
-# Examples for H100 80GB + Qwen3.5-27B (51GB weights):
-#   - 16000: Conservative (recommended) — allows initialization + batching
-#   - 32000: Medium — may fail initialization on some models
-#   - 0: Use model default (262K) — WILL cause OOM on H100 80GB
-serverless_max_model_len = 16000
-
-# Model weight precision (bfloat16, float16, float32)
-# bfloat16: 16-bit with good numerical stability (RECOMMENDED for most models)
-# float16:  faster but less stable, may cause precision issues
-# float32:  highest quality but uses 2x VRAM, slower inference
-# Leave empty for vLLM's auto-detection
-serverless_dtype = "bfloat16"
-
-# GPU memory utilization ratio (0.0 to 1.0)
-# CRITICAL: Keep below 0.85 to avoid OOM during initialization
-# vLLM needs headroom for KV cache allocation during engine startup
-# Examples for H100 80GB:
-#   - 0.75: Conservative (recommended) — ~60GB for model, ~20GB for overhead
-#   - 0.85: Aggressive — may fail on large models like Qwen3.5-27B
-#   - 0.95: Very aggressive — only works on smaller models (7B-13B)
-serverless_gpu_memory_utilization = 0.75
 
 # Optional extra environment variables to inject into the pod
 # [env_vars]
