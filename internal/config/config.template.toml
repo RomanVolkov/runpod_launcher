@@ -74,12 +74,12 @@ env_file_path = ""
 
 # --- Serverless endpoint settings ---
 # Docker image for the serverless worker
-# Use the latest vLLM worker from RunPod:
-#   runpod/worker-vllm:latest
-# Or alternative stable version:
-#   runpod/worker-v1-vllm:v2.19.0
+# Official RunPod vLLM worker: runpod/worker-v1-vllm:v2.19.0
+# vLLM version: 0.20.2
+# Repository: https://github.com/runpod-workers/worker-vllm
+# See docs/configuration.md for all available environment variables
 # Only used by 'serverless up' command
-serverless_image_name = "runpod/worker-vllm:latest"
+serverless_image_name = "runpod/worker-v1-vllm:v2.19.0"
 
 # Name for the serverless endpoint in RunPod (default: llm-launcher-serverless)
 # Only used by 'serverless up' and 'serverless down' commands

@@ -9,7 +9,7 @@ import (
 
 const (
 	DefaultEndpointName = "llm-launcher-serverless"
-	DefaultImageName    = "runpod/worker-v1-vllm:stable-cuda12.1.0"
+	DefaultImageName    = "runpod/worker-v1-vllm:v2.19.0"
 	DefaultWorkersMax   = 3
 	DefaultIdleTimeout  = 5
 	DefaultScalerType   = "QUEUE_DELAY"
