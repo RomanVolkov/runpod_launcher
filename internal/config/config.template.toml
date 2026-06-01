@@ -113,29 +113,29 @@ serverless_model_name = ""
 # vLLM-specific configuration for serverless endpoint (all optional)
 
 # Maximum model context length in tokens (limits KV cache)
-# Set to 0 to use the model's default maximum context
-# Limiting context can reduce VRAM usage but may hurt quality on long inputs
-# Examples:
-#   - 0: Use model default (Qwen3.5-27B default is 128K)
-#   - 32000: Reasonable limit for batch processing on large models
-#   - 4096: Conservative limit for memory-constrained setups
-serverless_max_model_len = 0
+# CRITICAL: Set this conservatively to avoid OOM during initialization
+# KV cache is the biggest memory consumer during batch processing
+# Examples for H100 80GB + Qwen3.5-27B (51GB weights):
+#   - 16000: Conservative (recommended) — allows initialization + batching
+#   - 32000: Medium — may fail initialization on some models
+#   - 0: Use model default (262K) — WILL cause OOM on H100 80GB
+serverless_max_model_len = 16000
 
 # Model weight precision (bfloat16, float16, float32)
 # bfloat16: 16-bit with good numerical stability (RECOMMENDED for most models)
 # float16:  faster but less stable, may cause precision issues
 # float32:  highest quality but uses 2x VRAM, slower inference
 # Leave empty for vLLM's auto-detection
-serverless_dtype = ""
+serverless_dtype = "bfloat16"
 
 # GPU memory utilization ratio (0.0 to 1.0)
-# Higher = more VRAM allocated to model, less for batching
-# Examples:
-#   - 0.95: Use 95% of VRAM (aggressive, good for single requests)
-#   - 0.85: Use 85% of VRAM (balanced for batch processing)
-#   - 0.70: Use 70% of VRAM (conservative, better concurrency)
-# Leave at 0 for vLLM's default (0.9)
-serverless_gpu_memory_utilization = 0.0
+# CRITICAL: Keep below 0.85 to avoid OOM during initialization
+# vLLM needs headroom for KV cache allocation during engine startup
+# Examples for H100 80GB:
+#   - 0.75: Conservative (recommended) — ~60GB for model, ~20GB for overhead
+#   - 0.85: Aggressive — may fail on large models like Qwen3.5-27B
+#   - 0.95: Very aggressive — only works on smaller models (7B-13B)
+serverless_gpu_memory_utilization = 0.75
 
 # Optional extra environment variables to inject into the pod
 # [env_vars]
