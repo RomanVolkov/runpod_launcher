@@ -4,8 +4,8 @@
 # RunPod API key (from runpod.io/console/user/settings → API Keys)
 runpod_api_key = ""
 
-# GPU type ID — verify from RunPod GPU list (e.g. "AMPERE_16", "ADA_LOVELACE_24")
-gpu_type_id = "AMPERE_16"
+# GPU type ID — verify from RunPod GPU list (e.g. "NVIDIA H100-PCIE-80GB", "H100 80GB")
+gpu_type_id = "NVIDIA H100-PCIE-80GB"
 
 # Minimum CUDA version required (e.g. "12.1", "12.9")
 # RunPod will allocate a GPU with this CUDA version or newer
