@@ -21,9 +21,9 @@ region = ""
 image_name = "ollama/ollama:latest"
 
 # LLM model to serve (required)
-# For Ollama: use format "modelname:tag" (e.g., "gemma:4", "mistral:latest")
+# For Ollama: use format "modelname:tag" (e.g., "qwen3.6:27b", "mistral:latest")
 # For vLLM: use full model ID (e.g., "google/gemma-4-31b-it", "qwen/qwen3.5-9b")
-model_name = ""
+model_name = "qwen3.6:27b"
 
 # Container disk size in GB
 container_disk_gb = 50
