@@ -109,32 +109,69 @@ func runAvailability(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(cmd.OutOrStdout(), "Available GPUs (Secure Cloud, Region=%s, CUDA=%s):\n\n",
 		orEmpty(region), orEmpty(cudaVersion))
 
+	// Check if any prices are available (non-zero)
+	hasPrices := false
+	for _, gpu := range gpuTypes {
+		if gpu.SecurePrice > 0 || gpu.CommunityPrice > 0 {
+			hasPrices = true
+			break
+		}
+	}
+
 	if availabilityAllClouds {
-		fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tSECURE AVAIL\tCOMMUNITY AVAIL\tSECURE PRICE\tCOMMUNITY PRICE")
-		for _, gpu := range gpuTypes {
-			secureAvail := formatAvailability(gpu.MaxGpuCountSecureCloud)
-			communityAvail := formatAvailability(gpu.MaxGpuCountCommunityCloud)
-			fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\t%s\t$%.4f/hr\t$%.4f/hr\n",
-				gpu.ID,
-				gpu.DisplayName,
-				gpu.MemoryInGb,
-				secureAvail,
-				communityAvail,
-				gpu.SecurePrice,
-				gpu.CommunityPrice,
-			)
+		if hasPrices {
+			fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tSECURE AVAIL\tCOMMUNITY AVAIL\tSECURE PRICE\tCOMMUNITY PRICE")
+			for _, gpu := range gpuTypes {
+				secureAvail := formatAvailability(gpu.MaxGpuCountSecureCloud)
+				communityAvail := formatAvailability(gpu.MaxGpuCountCommunityCloud)
+				fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\t%s\t$%.4f/hr\t$%.4f/hr\n",
+					gpu.ID,
+					gpu.DisplayName,
+					gpu.MemoryInGb,
+					secureAvail,
+					communityAvail,
+					gpu.SecurePrice,
+					gpu.CommunityPrice,
+				)
+			}
+		} else {
+			fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tSECURE AVAIL\tCOMMUNITY AVAIL")
+			for _, gpu := range gpuTypes {
+				secureAvail := formatAvailability(gpu.MaxGpuCountSecureCloud)
+				communityAvail := formatAvailability(gpu.MaxGpuCountCommunityCloud)
+				fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\t%s\n",
+					gpu.ID,
+					gpu.DisplayName,
+					gpu.MemoryInGb,
+					secureAvail,
+					communityAvail,
+				)
+			}
 		}
 	} else {
-		fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tAVAILABILITY\tSECURE PRICE")
-		for _, gpu := range gpuTypes {
-			avail := formatAvailability(gpu.MaxGpuCountSecureCloud)
-			fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\t$%.4f/hr\n",
-				gpu.ID,
-				gpu.DisplayName,
-				gpu.MemoryInGb,
-				avail,
-				gpu.SecurePrice,
-			)
+		if hasPrices {
+			fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tAVAILABILITY\tSECURE PRICE")
+			for _, gpu := range gpuTypes {
+				avail := formatAvailability(gpu.MaxGpuCountSecureCloud)
+				fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\t$%.4f/hr\n",
+					gpu.ID,
+					gpu.DisplayName,
+					gpu.MemoryInGb,
+					avail,
+					gpu.SecurePrice,
+				)
+			}
+		} else {
+			fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tAVAILABILITY")
+			for _, gpu := range gpuTypes {
+				avail := formatAvailability(gpu.MaxGpuCountSecureCloud)
+				fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\n",
+					gpu.ID,
+					gpu.DisplayName,
+					gpu.MemoryInGb,
+					avail,
+				)
+			}
 		}
 	}
 	w.Flush()
