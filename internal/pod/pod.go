@@ -299,22 +299,28 @@ func (c *RunPodClient) GetGPUTypes() ([]GPUType, error) {
 		if v, ok := raw["communityCloud"]; ok {
 			_ = json.Unmarshal(v, &gpu.CommunityCloud)
 		}
+		// Parse availability counts
 		if v, ok := raw["maxGpuCountSecureCloud"]; ok {
 			_ = json.Unmarshal(v, &gpu.MaxGpuCountSecureCloud)
-		} else if v, ok := raw["available"]; ok {
-			// Fallback: if available=true and secureCloud=true, set a non-zero count
-			var available bool
-			if _ = json.Unmarshal(v, &available); available && gpu.SecureCloud {
-				gpu.MaxGpuCountSecureCloud = 1 // Mark as available (at least 1 in stock)
-			}
 		}
 		if v, ok := raw["maxGpuCountCommunityCloud"]; ok {
 			_ = json.Unmarshal(v, &gpu.MaxGpuCountCommunityCloud)
-		} else if v, ok := raw["available"]; ok {
-			// Fallback: if available=true and communityCloud=true, set a non-zero count
-			var available bool
-			if _ = json.Unmarshal(v, &available); available && gpu.CommunityCloud {
-				gpu.MaxGpuCountCommunityCloud = 1 // Mark as available (at least 1 in stock)
+		}
+		// Fallback: if availability counts are zero/missing but GPU is available, mark as available
+		if gpu.MaxGpuCountSecureCloud == 0 {
+			if v, ok := raw["available"]; ok {
+				var available bool
+				if _ = json.Unmarshal(v, &available); available && gpu.SecureCloud {
+					gpu.MaxGpuCountSecureCloud = 1 // Mark as available (at least 1 in stock)
+				}
+			}
+		}
+		if gpu.MaxGpuCountCommunityCloud == 0 {
+			if v, ok := raw["available"]; ok {
+				var available bool
+				if _ = json.Unmarshal(v, &available); available && gpu.CommunityCloud {
+					gpu.MaxGpuCountCommunityCloud = 1 // Mark as available (at least 1 in stock)
+				}
 			}
 		}
 		gpuTypes = append(gpuTypes, gpu)
