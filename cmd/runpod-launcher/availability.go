@@ -176,8 +176,9 @@ func runAvailability(cmd *cobra.Command, args []string) error {
 	}
 	w.Flush()
 
-	fmt.Fprintf(cmd.OutOrStdout(), "\nThese GPUs are available (based on current inventory). "+
+	fmt.Fprintf(cmd.OutOrStdout(), "\nThese GPUs are available (based on current inventory).\n\n"+
 		"Note: Availability counts can change rapidly.\n"+
+		"Pricing is not available via CLI. Check RunPod console for current rates: https://runpod.io/console/pods\n"+
 		"The 'up' command will validate GPU availability at deployment time.\n"+
 		"Use with: runpod-launcher up\n")
 	return nil
