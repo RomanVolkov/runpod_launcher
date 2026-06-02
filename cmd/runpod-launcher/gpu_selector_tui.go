@@ -232,9 +232,13 @@ func selectGPUTypeTUI(gpus []pod.GPUType, region, cudaVersion string) (string, e
 	}
 
 	selector := finalModel.(*GPUSelectorModel)
-	if selector.selected == "" && len(gpus) > 0 {
-		// Default to first if nothing selected (e.g., quit without selecting)
+	// Return selected GPU, or default to first GPU if nothing selected
+	if selector.selected != "" {
+		return selector.selected, nil
+	}
+	if len(gpus) > 0 {
 		return gpus[0].ID, nil
 	}
-	return selector.selected, nil
+	// This should never happen since selectGPUType checks len(secureGPUs) > 0
+	return "", fmt.Errorf("no GPUs available to select")
 }

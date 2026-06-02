@@ -269,7 +269,10 @@ func (c *RunPodClient) GetGPUTypes() ([]GPUType, error) {
 	var gpuTypes []GPUType
 	for _, raw := range rawGPUs {
 		gpu := GPUType{}
+		// Try both "id" and "gpuId" field names (API compatibility)
 		if v, ok := raw["id"]; ok {
+			_ = json.Unmarshal(v, &gpu.ID)
+		} else if v, ok := raw["gpuId"]; ok {
 			_ = json.Unmarshal(v, &gpu.ID)
 		}
 		if v, ok := raw["displayName"]; ok {
@@ -298,9 +301,21 @@ func (c *RunPodClient) GetGPUTypes() ([]GPUType, error) {
 		}
 		if v, ok := raw["maxGpuCountSecureCloud"]; ok {
 			_ = json.Unmarshal(v, &gpu.MaxGpuCountSecureCloud)
+		} else if v, ok := raw["available"]; ok {
+			// Fallback: if available=true and secureCloud=true, set a non-zero count
+			var available bool
+			if _ = json.Unmarshal(v, &available); available && gpu.SecureCloud {
+				gpu.MaxGpuCountSecureCloud = 1 // Mark as available (at least 1 in stock)
+			}
 		}
 		if v, ok := raw["maxGpuCountCommunityCloud"]; ok {
 			_ = json.Unmarshal(v, &gpu.MaxGpuCountCommunityCloud)
+		} else if v, ok := raw["available"]; ok {
+			// Fallback: if available=true and communityCloud=true, set a non-zero count
+			var available bool
+			if _ = json.Unmarshal(v, &available); available && gpu.CommunityCloud {
+				gpu.MaxGpuCountCommunityCloud = 1 // Mark as available (at least 1 in stock)
+			}
 		}
 		gpuTypes = append(gpuTypes, gpu)
 	}
