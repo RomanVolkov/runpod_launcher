@@ -75,21 +75,24 @@ Create or edit `~/.config/runpod-launcher/config.toml`:
 runpod_api_key = "your-api-key-here"
 
 # GPU selection
-gpu_type_id = "NVIDIA A100-SXM4-80GB"
-cuda_version = "13.0"  # Leave empty for any CUDA version
-region = ""  # Leave empty for any region
+gpu_type_id = "NVIDIA A100-SXM4-80GB"    # 80GB VRAM for large models
+cuda_version = ""                         # Leave empty for any CUDA version
+region = ""                               # Leave empty for any region
 
 # Container setup
-image_name = "ollama/ollama:latest"
-container_disk_gb = 50
+image_name = "ollama/ollama:latest"      # Latest Ollama version
+container_disk_gb = 150                  # Storage for model weights
 volume_mount_path = "/workspace"
 
 # Model configuration
-model_name = "gemma4"
+model_name = "qwen3.6:27b"               # Qwen 3.6 27B model
 pod_name = "llm-launcher"
+ollama_context_len = 131072              # 128K token context window
+max_model_len = 0                        # Let Ollama auto-detect
 
 # OpenCode integration (optional)
 opencode_config_path = "~/.config/opencode/opencode.jsonc"
+env_file_path = "~/.env"
 ```
 
 ### Configuration Options
@@ -101,9 +104,11 @@ opencode_config_path = "~/.config/opencode/opencode.jsonc"
 | `cuda_version` | Minimum CUDA version (empty = any) | `13.0` |
 | `region` | Preferred region (empty = any) | `EUR-NO-1` |
 | `image_name` | Docker image to use | `ollama/ollama:latest` |
-| `model_name` | Ollama model to run | `gemma4`, `mistral`, `qwen` |
-| `container_disk_gb` | Container disk space (GB) | `50` |
+| `model_name` | Ollama model to run | `qwen3.6:27b`, `mistral`, `gemma4` |
+| `container_disk_gb` | Container disk space (GB) | `150` |
+| `ollama_context_len` | Context window in tokens | `131072` (128K) |
 | `opencode_config_path` | OpenCode config file path | `~/.config/opencode/opencode.jsonc` |
+| `env_file_path` | Environment file for credentials | `~/.env` |
 
 ## CLI Commands
 
@@ -254,7 +259,7 @@ Model gemma4:latest is loaded and ready
 # 5. Query your model
 $ curl https://pod-abc123-8000.proxy.runpod.net/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "gemma4:latest", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{"model": "qwen3.6:27b", "messages": [{"role": "user", "content": "Hello!"}]}'
 
 # 6. Tear down when done
 $ runpod-launcher down
@@ -337,11 +342,13 @@ runpod-launcher/
 
 ✅ **Interactive GPU Selection** — Beautiful TUI with real-time availability, filtering, and price sorting
 
-✅ **GPU Availability Checking** — Query RunPod's current GPU inventory with pricing and specifications
+✅ **GPU Availability Validation** — Pre-flight checks ensure selected GPU is actually available before deployment
+
+✅ **GPU Inventory Checking** — Query RunPod's current GPU inventory with real-time availability status
 
 ✅ **Auto-Generated API Keys** — Secure, random keys created automatically
 
-✅ **Ollama Integration** — Support for 100+ models (Gemma, Qwen, Mistral, Llama, etc.). Or use a different inference like llama, vLLM, etc.
+✅ **Ollama Integration** — Support for 100+ models (Qwen, Gemma, Mistral, Llama, etc.)
 
 ✅ **OpenAI-Compatible API** — Drop-in replacement for OpenAI client
 
@@ -353,15 +360,20 @@ runpod-launcher/
 
 ## Supported Models
 
-E.g., any model from [Ollama Library](https://ollama.com/library):
+Any model from [Ollama Library](https://ollama.com/library):
 
-- **Gemma**: `gemma`, `gemma:4`
+- **Qwen** (default): `qwen3.6:27b`, `qwen3.5-9b`, `qwen2:7b`
+- **Gemma**: `gemma:2`, `gemma:4`
 - **Mistral**: `mistral`, `mistral-openorca`
-- **Qwen**: `qwen`, `qwen3.5-9b`
-- **Llama**: `llama2`, `llama2-uncensored`
+- **Llama**: `llama2`, `llama2-uncensored`, `llama3:8b`
 - **Neural Chat**: `neural-chat`
 - **Dolphin**: `dolphin-mixtral`
 - And 100+ more...
+
+**Memory Guidance for A100 80GB:**
+- **Qwen3.6:27B** (51GB weights) + 128K context = ~80GB total ✓ Fits perfectly
+- Smaller models (7B-13B) can use larger context windows (256K+)
+- For smaller GPUs (24-48GB), use smaller models (7B-13B) or quantization
 
 ## Testing
 
