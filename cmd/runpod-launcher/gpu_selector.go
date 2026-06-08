@@ -7,13 +7,15 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/romanvolkov/runpod-launcher/internal/config"
+	"github.com/romanvolkov/runpod-launcher/internal/models"
 	"github.com/romanvolkov/runpod-launcher/internal/pod"
 )
 
 // selectGPUType presents the user with an interactive GPU selection using bubble tea TUI.
 // It fetches available GPUs, filters to secure-only, and lets the user pick one.
+// If modelName is provided, pre-filters GPUs suitable for that model.
 // Returns the selected GPU's ID.
-func selectGPUType(cmd *cobra.Command, client pod.PodClient, currentGPUTypeID, region, cudaVersion string) (string, error) {
+func selectGPUType(cmd *cobra.Command, client pod.PodClient, currentGPUTypeID, region, cudaVersion, modelName string, modelOverrides map[string]models.ModelSpec) (string, error) {
 	stderr := cmd.ErrOrStderr()
 	fmt.Fprintf(stderr, "Fetching available GPUs...\n")
 
@@ -34,6 +36,25 @@ func selectGPUType(cmd *cobra.Command, client pod.PodClient, currentGPUTypeID, r
 
 	if len(secureGPUs) == 0 {
 		return "", fmt.Errorf("no GPUs available in secure cloud")
+	}
+
+	// If model specified, pre-filter GPUs by minimum VRAM requirements
+	if modelName != "" {
+		modelSpec, err := models.GetModelSpec(modelName, modelOverrides)
+		if err != nil {
+			fmt.Fprintf(stderr, "Warning: could not get model specs for %q: %v\n", modelName, err)
+		} else {
+			var filtered []pod.GPUType
+			for _, gpu := range secureGPUs {
+				if gpu.MemoryInGb >= modelSpec.MinVramGb {
+					filtered = append(filtered, gpu)
+				}
+			}
+			if len(filtered) > 0 {
+				secureGPUs = filtered
+				fmt.Fprintf(stderr, "Pre-filtered GPUs suitable for %s (min %dGB)\n", modelName, modelSpec.MinVramGb)
+			}
+		}
 	}
 
 	// Sort by stock status (High > Medium > Low > Unknown), then by price
@@ -93,6 +114,50 @@ func isTerminal(f *os.File) bool {
 	return (stat.Mode() & os.ModeCharDevice) != 0
 }
 
+// promptForModelSelection allows user to select a model (if none configured)
+// Returns true if model was selected interactively, false otherwise
+func promptForModelSelection(cmd *cobra.Command, cfg *config.Config) (bool, error) {
+	stderr := cmd.ErrOrStderr()
+
+	// Skip if model already set in config
+	if cfg.ModelName != "" {
+		return false, nil
+	}
+
+	// Skip interactive prompts in JSON mode or when stdin is not a terminal
+	if upJSON || !isTerminal(os.Stdin) {
+		return false, nil
+	}
+
+	// Get available models
+	availableModels := models.ListAvailableModels(cfg.ModelSpecsOverride)
+	if len(availableModels) == 0 {
+		return false, nil
+	}
+
+	fmt.Fprintf(stderr, "\nAvailable models:\n")
+	for i, m := range availableModels {
+		fmt.Fprintf(stderr, "  %d. %s\n", i+1, m)
+	}
+
+	fmt.Fprintf(stderr, "\nSelect a model (1-%d) [1]: ", len(availableModels))
+	var input string
+	_, err := fmt.Scanln(&input)
+	if err != nil || input == "" {
+		input = "1"
+	}
+
+	var choice int
+	_, err = fmt.Sscanf(input, "%d", &choice)
+	if err != nil || choice < 1 || choice > len(availableModels) {
+		choice = 1
+	}
+
+	cfg.ModelName = availableModels[choice-1]
+	fmt.Fprintf(stderr, "Selected model: %s\n", cfg.ModelName)
+	return true, nil
+}
+
 // promptForGPUSelection asks the user if they want to select a different GPU.
 // If upSelectGPU flag is set, skips the confirmation and goes directly to selection.
 // Skips interactive prompts in JSON mode or when stdin is not a terminal.
@@ -129,7 +194,7 @@ func promptForGPUSelection(cmd *cobra.Command, client pod.PodClient, cfg *config
 	}
 
 	// User wants to select a GPU
-	selectedGPU, err := selectGPUType(cmd, client, cfg.GPUTypeID, cfg.Region, cfg.CudaVersion)
+	selectedGPU, err := selectGPUType(cmd, client, cfg.GPUTypeID, cfg.Region, cfg.CudaVersion, cfg.ModelName, cfg.ModelSpecsOverride)
 	if err != nil {
 		return fmt.Errorf("failed to select GPU: %w", err)
 	}

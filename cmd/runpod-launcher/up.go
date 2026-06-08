@@ -76,6 +76,12 @@ func runUp(cmd *cobra.Command, args []string) error {
 		return printUpResult(cmd, upJSON, existingID, true, cfg, "")
 	}
 
+	// Prompt for model selection (if not already configured)
+	_, err = promptForModelSelection(cmd, cfg)
+	if err != nil {
+		return err
+	}
+
 	// Prompt for GPU selection
 	err = promptForGPUSelection(cmd, client, cfg)
 	if err != nil {
