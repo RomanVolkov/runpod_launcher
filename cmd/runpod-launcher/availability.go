@@ -9,13 +9,22 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/romanvolkov/runpod-launcher/internal/config"
-	"github.com/romanvolkov/runpod-launcher/internal/pod"
+	"github.com/romanvolkov/runpod-launcher/internal/graphql"
+	"github.com/romanvolkov/runpod-launcher/internal/models"
 )
 
 var availabilityJSON bool
-var availabilityAllClouds bool
-var availabilityRegion string
-var availabilityCudaVersion string
+var availabilityModel string
+
+// GPUWithPrice combines GPU info with pricing
+type GPUWithPrice struct {
+	ID               string  `json:"id"`
+	DisplayName      string  `json:"displayName"`
+	MemoryGb         int     `json:"memoryGb"`
+	Price            float64 `json:"price,omitempty"`
+	Suitability      string  `json:"suitability,omitempty"`
+	SuitabilityScore float64 `json:"suitabilityScore,omitempty"`
+}
 
 // formatAvailability converts max GPU count to a human-readable availability string
 func formatAvailability(maxCount int) string {
@@ -28,25 +37,15 @@ func formatAvailability(maxCount int) string {
 	return "Unavailable"
 }
 
-// orEmpty returns "(any)" if s is empty, otherwise returns s
-func orEmpty(s string) string {
-	if s == "" {
-		return "(any)"
-	}
-	return s
-}
-
 var availabilityCmd = &cobra.Command{
 	Use:   "availability",
-	Short: "List available GPU types with pricing and specifications",
+	Short: "List available GPUs with pricing (via GraphQL API)",
 	RunE:  runAvailability,
 }
 
 func init() {
-	availabilityCmd.Flags().BoolVar(&availabilityJSON, "json", false, "output result as JSON")
-	availabilityCmd.Flags().BoolVar(&availabilityAllClouds, "all-clouds", false, "show both secure and community cloud availability (default: secure only)")
-	availabilityCmd.Flags().StringVar(&availabilityRegion, "region", "", "filter by region (overrides config; empty = any region)")
-	availabilityCmd.Flags().StringVar(&availabilityCudaVersion, "cuda-version", "", "filter by CUDA version (overrides config; empty = any CUDA version)")
+	availabilityCmd.Flags().BoolVar(&availabilityJSON, "json", false, "output as JSON")
+	availabilityCmd.Flags().StringVar(&availabilityModel, "model", "", "filter/highlight GPUs suitable for model (e.g., 'qwen3.6:27b')")
 }
 
 func runAvailability(cmd *cobra.Command, args []string) error {
@@ -55,131 +54,131 @@ func runAvailability(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Resolve effective region and CUDA version from flags or config
-	region := availabilityRegion
-	if region == "" {
-		region = cfg.Region
-	}
-	cudaVersion := availabilityCudaVersion
-	if cudaVersion == "" {
-		cudaVersion = cfg.CudaVersion
-	}
-
-	client := newPodClient(cfg.RunpodAPIKey)
-	gpuTypes, err := client.GetGPUTypes()
+	// Create GraphQL client
+	gqlClient, err := graphql.NewClient(cfg.RunpodAPIKey)
 	if err != nil {
-		return fmt.Errorf("failed to query GPU types: %w", err)
+		return fmt.Errorf("failed to create GraphQL client: %w", err)
 	}
 
-	// Display filter info to user
-	fmt.Fprintf(cmd.ErrOrStderr(), "Filters: Cloud=Secure, Region=%s, CudaVersion=%s\n\n",
-		orEmpty(region), orEmpty(cudaVersion))
+	// Fetch GPU types
+	gpuTypes, err := gqlClient.GetGPUTypes()
+	if err != nil {
+		return fmt.Errorf("failed to fetch GPU types: %w", err)
+	}
 
-	// Always filter to secure cloud (matches CreatePod behavior)
-	var filtered []pod.GPUType
+	if len(gpuTypes) == 0 {
+		fmt.Fprintf(cmd.OutOrStderr(), "No GPUs available\n")
+		return nil
+	}
+
+	// Fetch pricing info
+	priceInput := &graphql.GPULowestPriceInput{
+		GpuCount:    1,
+		SecureCloud: boolPtr(true),
+	}
+	prices, err := gqlClient.GetLowestPrice(priceInput)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not fetch pricing: %v\n", err)
+		prices = nil
+	}
+
+	// Build price map for quick lookup
+	priceMap := make(map[string]float64)
+	for _, p := range prices {
+		if p.UninterruptablePrice > 0 {
+			priceMap[p.GPUTypeID] = p.UninterruptablePrice
+		} else {
+			priceMap[p.GPUTypeID] = p.MinimumBidPrice
+		}
+	}
+
+	// Filter to secure cloud only and convert to simple structure
+	var gpuList []GPUWithPrice
 	for _, gpu := range gpuTypes {
 		if !gpu.SecureCloud {
 			continue
 		}
-		// If GPU has zero availability in secure cloud, skip it
-		if gpu.MaxGpuCountSecureCloud == 0 {
-			continue
-		}
-		filtered = append(filtered, gpu)
-	}
-	gpuTypes = filtered
 
-	// Sort by secure cloud price (cheapest first), then by ID for consistent ordering
-	sort.Slice(gpuTypes, func(i, j int) bool {
-		if gpuTypes[i].SecurePrice != gpuTypes[j].SecurePrice {
-			return gpuTypes[i].SecurePrice < gpuTypes[j].SecurePrice
+		price := priceMap[gpu.ID]
+		item := GPUWithPrice{
+			ID:          gpu.ID,
+			DisplayName: gpu.DisplayName,
+			MemoryGb:    gpu.MemoryInGb,
+			Price:       price,
 		}
-		return gpuTypes[i].ID < gpuTypes[j].ID
+
+		// If model specified, calculate suitability
+		if availabilityModel != "" {
+			modelSpec, err := models.GetModelSpec(availabilityModel, cfg.ModelSpecsOverride)
+			if err != nil {
+				return fmt.Errorf("unknown model %q: %w", availabilityModel, err)
+			}
+
+			gpuInfo := models.GPUInfo{
+				ID:       gpu.ID,
+				Name:     gpu.DisplayName,
+				MemoryGb: gpu.MemoryInGb,
+			}
+			suitability := models.CalculateSuitability(gpuInfo, modelSpec)
+			item.Suitability = suitability.Level
+			item.SuitabilityScore = suitability.SuitabilityScore
+		}
+
+		gpuList = append(gpuList, item)
+	}
+
+	// Sort by price (cheapest first), then by ID
+	sort.Slice(gpuList, func(i, j int) bool {
+		if gpuList[i].Price != gpuList[j].Price {
+			return gpuList[i].Price < gpuList[j].Price
+		}
+		return gpuList[i].ID < gpuList[j].ID
 	})
 
 	if availabilityJSON {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetEscapeHTML(false)
-		return enc.Encode(gpuTypes)
+		return enc.Encode(gpuList)
 	}
 
 	// Print human-readable table
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+	fmt.Fprintf(cmd.OutOrStdout(), "Available GPUs (Secure Cloud):\n\n")
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Available GPUs (Secure Cloud, Region=%s, CUDA=%s):\n\n",
-		orEmpty(region), orEmpty(cudaVersion))
-
-	// Check if any prices are available (non-zero)
-	hasPrices := false
-	for _, gpu := range gpuTypes {
-		if gpu.SecurePrice > 0 || gpu.CommunityPrice > 0 {
-			hasPrices = true
-			break
-		}
-	}
-
-	if availabilityAllClouds {
-		if hasPrices {
-			fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tSECURE AVAIL\tCOMMUNITY AVAIL\tSECURE PRICE\tCOMMUNITY PRICE")
-			for _, gpu := range gpuTypes {
-				secureAvail := formatAvailability(gpu.MaxGpuCountSecureCloud)
-				communityAvail := formatAvailability(gpu.MaxGpuCountCommunityCloud)
-				fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\t%s\t$%.4f/hr\t$%.4f/hr\n",
-					gpu.ID,
-					gpu.DisplayName,
-					gpu.MemoryInGb,
-					secureAvail,
-					communityAvail,
-					gpu.SecurePrice,
-					gpu.CommunityPrice,
-				)
+	if availabilityModel != "" {
+		fmt.Fprintln(w, "GPU ID\tNAME\tMEMORY\tSUITABILITY\tPRICE")
+		for _, gpu := range gpuList {
+			suitLabel := gpu.Suitability
+			if suitLabel == "" {
+				suitLabel = "?"
 			}
-		} else {
-			fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tSECURE AVAIL\tCOMMUNITY AVAIL")
-			for _, gpu := range gpuTypes {
-				secureAvail := formatAvailability(gpu.MaxGpuCountSecureCloud)
-				communityAvail := formatAvailability(gpu.MaxGpuCountCommunityCloud)
-				fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\t%s\n",
-					gpu.ID,
-					gpu.DisplayName,
-					gpu.MemoryInGb,
-					secureAvail,
-					communityAvail,
-				)
+			priceStr := "N/A"
+			if gpu.Price > 0 {
+				priceStr = fmt.Sprintf("$%.4f/hr", gpu.Price)
 			}
+			fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\t%s\n",
+				gpu.ID, gpu.DisplayName, gpu.MemoryGb, suitLabel, priceStr)
 		}
 	} else {
-		if hasPrices {
-			fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tAVAILABILITY\tSECURE PRICE")
-			for _, gpu := range gpuTypes {
-				avail := formatAvailability(gpu.MaxGpuCountSecureCloud)
-				fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\t$%.4f/hr\n",
-					gpu.ID,
-					gpu.DisplayName,
-					gpu.MemoryInGb,
-					avail,
-					gpu.SecurePrice,
-				)
+		fmt.Fprintln(w, "GPU ID\tNAME\tMEMORY\tPRICE")
+		for _, gpu := range gpuList {
+			priceStr := "N/A"
+			if gpu.Price > 0 {
+				priceStr = fmt.Sprintf("$%.4f/hr", gpu.Price)
 			}
-		} else {
-			fmt.Fprintln(w, "GPU TYPE ID\tNAME\tMEMORY\tAVAILABILITY")
-			for _, gpu := range gpuTypes {
-				avail := formatAvailability(gpu.MaxGpuCountSecureCloud)
-				fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\n",
-					gpu.ID,
-					gpu.DisplayName,
-					gpu.MemoryInGb,
-					avail,
-				)
-			}
+			fmt.Fprintf(w, "%s\t%s\t%dGB\t%s\n",
+				gpu.ID, gpu.DisplayName, gpu.MemoryGb, priceStr)
 		}
 	}
 	w.Flush()
 
-	fmt.Fprintf(cmd.OutOrStdout(), "\nThese GPUs are available (based on current inventory).\n\n"+
-		"Note: Availability counts can change rapidly.\n"+
-		"Pricing is not available via CLI. Check RunPod console for current rates: https://runpod.io/console/pods\n"+
-		"The 'up' command will validate GPU availability at deployment time.\n"+
-		"Use with: runpod-launcher up\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "\nNote: Prices from GraphQL API (real-time).\n")
+	if availabilityModel != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "Suitability for model %q: green=suitable, yellow=marginal, red=insufficient\n", availabilityModel)
+	}
 	return nil
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }
