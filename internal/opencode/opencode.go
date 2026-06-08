@@ -17,8 +17,7 @@ func UpdateConfig(path, baseURL, apiKey, modelName string) error {
 }
 
 // UpdateConfigWithProvider is like UpdateConfig but allows specifying the provider name.
-// This enables updating either the "runpod" provider (for pods) or "runpod-serverless"
-// provider (for serverless endpoints) in the same config file.
+// This enables updating different provider configurations in the same config file.
 func UpdateConfigWithProvider(path, baseURL, apiKey, modelName, providerName string) error {
 	return updateConfigWithProvider(path, baseURL, apiKey, modelName, providerName, "")
 }
@@ -141,8 +140,6 @@ func updateConfigWithProvider(path, baseURL, apiKey, modelName, providerName, ap
 
 func providerDisplayName(providerName string) string {
 	switch providerName {
-	case "runpod-serverless":
-		return "RunPod Serverless"
 	case "runpod":
 		return "RunPod"
 	default:
