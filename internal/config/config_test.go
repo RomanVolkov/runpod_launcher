@@ -291,3 +291,64 @@ func TestTemplateContent(t *testing.T) {
 		t.Error("TemplateContent should contain 'runpod_api_key'")
 	}
 }
+
+func TestLoad_ModelSpecsOverride(t *testing.T) {
+	content := `
+runpod_api_key = "rp_key"
+gpu_type_id    = "AMPERE_16"
+model_name     = "some/model"
+
+[model_specs_override.qwen3_6_27b]
+min_vram_gb = 75
+context_window = 131072
+description = "Custom Qwen3.6 27B"
+
+[model_specs_override.mistral_latest]
+min_vram_gb = 20
+context_window = 32768
+description = "Custom Mistral"
+`
+	path := writeConfig(t, content, 0600)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("expected no error loading config with model_specs_override, got: %v", err)
+	}
+
+	if len(cfg.ModelSpecsOverride) != 2 {
+		t.Fatalf("expected 2 model overrides, got %d", len(cfg.ModelSpecsOverride))
+	}
+
+	qwenSpec, ok := cfg.ModelSpecsOverride["qwen3_6_27b"]
+	if !ok {
+		t.Fatal("expected qwen3_6_27b in model_specs_override")
+	}
+	if qwenSpec.MinVramGb != 75 || qwenSpec.ContextWindow != 131072 {
+		t.Errorf("qwen3_6_27b: got MinVramGb=%d, ContextWindow=%d, want 75, 131072", qwenSpec.MinVramGb, qwenSpec.ContextWindow)
+	}
+
+	mistralSpec, ok := cfg.ModelSpecsOverride["mistral_latest"]
+	if !ok {
+		t.Fatal("expected mistral_latest in model_specs_override")
+	}
+	if mistralSpec.MinVramGb != 20 {
+		t.Errorf("mistral_latest MinVramGb: got %d, want 20", mistralSpec.MinVramGb)
+	}
+}
+
+func TestLoad_ModelSpecsOverrideOptional(t *testing.T) {
+	content := `
+runpod_api_key = "rp_key"
+gpu_type_id    = "AMPERE_16"
+model_name     = "some/model"
+`
+	path := writeConfig(t, content, 0600)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("expected no error loading config without model_specs_override, got: %v", err)
+	}
+
+	// ModelSpecsOverride should be nil (not present) or empty when not in TOML
+	if cfg.ModelSpecsOverride != nil && len(cfg.ModelSpecsOverride) != 0 {
+		t.Errorf("ModelSpecsOverride should be nil or empty when not specified, got %d items", len(cfg.ModelSpecsOverride))
+	}
+}

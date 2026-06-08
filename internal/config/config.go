@@ -9,6 +9,7 @@ import (
 	"runtime"
 
 	"github.com/BurntSushi/toml"
+	"github.com/romanvolkov/runpod-launcher/internal/models"
 )
 
 //go:embed config.template.toml
@@ -34,6 +35,8 @@ type Config struct {
 	OpenCodeConfigPath string            `toml:"opencode_config_path"`
 	EnvFilePath        string            `toml:"env_file_path"`
 	EnvVars            map[string]string `toml:"env_vars"`
+
+	ModelSpecsOverride map[string]models.ModelSpec `toml:"model_specs_override"`
 
 	// configPath is stored but not serialized - used by SaveAPIKey
 	configPath string

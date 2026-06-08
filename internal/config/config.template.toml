@@ -76,3 +76,20 @@ env_file_path = ""
 # Optional extra environment variables to inject into the pod
 # [env_vars]
 # MY_VAR = "value"
+
+# Optional: override model specifications (e.g., VRAM requirements, context window)
+# Primary source is Ollama API (when available); these overrides let you customize model specs
+# Format: [model_specs_override.model_name] with min_vram_gb and context_window
+# Example:
+# [model_specs_override.qwen3_6_27b]
+# min_vram_gb = 75
+# context_window = 131072
+# description = "Custom Qwen3.6 27B spec"
+#
+# Available models (with defaults):
+# - qwen3.6:27b (70GB, 128K context)
+# - qwen3.5:27b (55GB, 32K context)
+# - gemma:4 (40GB, 256K context)
+# - gemma2:27b (50GB, 8K context)
+# - mistral:latest (20GB, 32K context)
+# - llama3:70b (75GB, 8K context)
