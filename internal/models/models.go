@@ -31,150 +31,94 @@ type GPUSuitability struct {
 	Level         string    // "green", "yellow", "red"
 }
 
-// DefaultModels contains hardcoded specs for popular Ollama models
+// DefaultModels contains latest generation Ollama models (≤40B parameters only)
 var DefaultModels = map[string]ModelSpec{
-	// Deepseek (Reasoning & Latest Gen)
-	"deepseek-r1:latest": {
-		Name:          "deepseek-r1:latest",
-		MinVramGb:     140,
-		ContextWindow: 131072,
-		Description:   "DeepSeek R1 (Reasoning) - 140GB VRAM, 128K context",
+	// Gemma 4 (Google - Latest, ≤40B only)
+	"gemma4:12b": {
+		Name:          "gemma4:12b",
+		MinVramGb:     18,
+		ContextWindow: 8192,
+		Description:   "Google Gemma 4 12B - 18GB VRAM, 8K context",
 	},
-	"deepseek-v3:latest": {
-		Name:          "deepseek-v3:latest",
-		MinVramGb:     200,
-		ContextWindow: 131072,
-		Description:   "DeepSeek V3 (Latest) - 200GB VRAM, 128K context",
-	},
-	"deepseek-coder-v2:latest": {
-		Name:          "deepseek-coder-v2:latest",
-		MinVramGb:     100,
-		ContextWindow: 131072,
-		Description:   "DeepSeek Coder V2 - 100GB VRAM, 128K context",
-	},
-
-	// Llama (Meta - Most Popular)
-	"llama2": {
-		Name:          "llama2",
-		MinVramGb:     35,
-		ContextWindow: 4096,
-		Description:   "Meta Llama 2 70B - 35GB VRAM, 4K context",
-	},
-	"llama3:latest": {
-		Name:          "llama3:latest",
+	"gemma4:26b": {
+		Name:          "gemma4:26b",
 		MinVramGb:     40,
 		ContextWindow: 8192,
-		Description:   "Meta Llama 3 70B - 40GB VRAM, 8K context",
+		Description:   "Google Gemma 4 26B - 40GB VRAM, 8K context",
 	},
-	"llama3.1:latest": {
-		Name:          "llama3.1:latest",
-		MinVramGb:     45,
+	"gemma4:31b": {
+		Name:          "gemma4:31b",
+		MinVramGb:     50,
+		ContextWindow: 8192,
+		Description:   "Google Gemma 4 31B - 50GB VRAM, 8K context",
+	},
+
+	// Llama 3.1 (Meta - Latest, ≤40B only)
+	"llama3.1:8b": {
+		Name:          "llama3.1:8b",
+		MinVramGb:     15,
 		ContextWindow: 131072,
-		Description:   "Meta Llama 3.1 405B - 80GB VRAM, 128K context",
+		Description:   "Meta Llama 3.1 8B - 15GB VRAM, 128K context",
 	},
-	"llama3.2:latest": {
-		Name:          "llama3.2:latest",
-		MinVramGb:     40,
+
+	// Qwen 3.6 (Alibaba - Latest, ≤40B only)
+	"qwen3.6:7b": {
+		Name:          "qwen3.6:7b",
+		MinVramGb:     15,
 		ContextWindow: 131072,
-		Description:   "Meta Llama 3.2 - 40GB VRAM, 128K context",
+		Description:   "Alibaba Qwen 3.6 7B - 15GB VRAM, 128K context",
 	},
-	"llama3.3:latest": {
-		Name:          "llama3.3:latest",
+	"qwen3.6:27b": {
+		Name:          "qwen3.6:27b",
 		MinVramGb:     50,
 		ContextWindow: 131072,
-		Description:   "Meta Llama 3.3 (Latest) - 50GB VRAM, 128K context",
+		Description:   "Alibaba Qwen 3.6 27B - 50GB VRAM, 128K context",
+	},
+	"qwen3.6:32b": {
+		Name:          "qwen3.6:32b",
+		MinVramGb:     60,
+		ContextWindow: 131072,
+		Description:   "Alibaba Qwen 3.6 32B - 60GB VRAM, 128K context",
 	},
 
-	// Gemma (Google - Efficient)
-	"gemma:latest": {
-		Name:          "gemma:latest",
-		MinVramGb:     15,
-		ContextWindow: 8192,
-		Description:   "Google Gemma 7B - 15GB VRAM, 8K context",
-	},
-	"gemma2:latest": {
-		Name:          "gemma2:latest",
-		MinVramGb:     35,
-		ContextWindow: 8192,
-		Description:   "Google Gemma 2 27B - 35GB VRAM, 8K context",
-	},
-	"gemma3:latest": {
-		Name:          "gemma3:latest",
-		MinVramGb:     40,
-		ContextWindow: 8192,
-		Description:   "Google Gemma 3 - 40GB VRAM, 8K context",
-	},
-	"gemma4:latest": {
-		Name:          "gemma4:latest",
-		MinVramGb:     65,
-		ContextWindow: 8192,
-		Description:   "Google Gemma 4 31B - 65GB VRAM, 8K context",
-	},
-
-	// Qwen (Alibaba - Multilingual)
-	"qwen:latest": {
-		Name:          "qwen:latest",
-		MinVramGb:     25,
-		ContextWindow: 32768,
-		Description:   "Alibaba Qwen - 25GB VRAM, 32K context",
-	},
-	"qwen2:latest": {
-		Name:          "qwen2:latest",
-		MinVramGb:     30,
-		ContextWindow: 32768,
-		Description:   "Alibaba Qwen 2 - 30GB VRAM, 32K context",
-	},
-	"qwen2.5:latest": {
-		Name:          "qwen2.5:latest",
-		MinVramGb:     35,
-		ContextWindow: 131072,
-		Description:   "Alibaba Qwen 2.5 (Latest) - 35GB VRAM, 128K context",
-	},
-	"qwen3:latest": {
-		Name:          "qwen3:latest",
-		MinVramGb:     40,
-		ContextWindow: 131072,
-		Description:   "Alibaba Qwen 3 - 40GB VRAM, 128K context",
-	},
-	"qwen3.6:latest": {
-		Name:          "qwen3.6:latest",
-		MinVramGb:     70,
-		ContextWindow: 131072,
-		Description:   "Alibaba Qwen 3.6 27B - 70GB VRAM, 128K context",
-	},
-
-	// Mistral (European - Fast)
-	"mistral:latest": {
-		Name:          "mistral:latest",
+	// Mistral Large 3 (European - Latest, ≤40B)
+	"mistral:7b": {
+		Name:          "mistral:7b",
 		MinVramGb:     15,
 		ContextWindow: 32768,
 		Description:   "Mistral 7B - 15GB VRAM, 32K context",
 	},
-	"mistral-small:latest": {
-		Name:          "mistral-small:latest",
-		MinVramGb:     20,
+	"mistral-small:12b": {
+		Name:          "mistral-small:12b",
+		MinVramGb:     18,
 		ContextWindow: 32768,
-		Description:   "Mistral Small - 20GB VRAM, 32K context",
+		Description:   "Mistral Small 12B - 18GB VRAM, 32K context",
 	},
-	"mistral-medium-3.5:latest": {
-		Name:          "mistral-medium-3.5:latest",
-		MinVramGb:     40,
-		ContextWindow: 131072,
-		Description:   "Mistral Medium 3.5 - 40GB VRAM, 128K context",
-	},
-	"mistral-large-3:latest": {
-		Name:          "mistral-large-3:latest",
-		MinVramGb:     90,
-		ContextWindow: 131072,
-		Description:   "Mistral Large 3 123B - 90GB VRAM, 128K context",
+	"mistral-small:22b": {
+		Name:          "mistral-small:22b",
+		MinVramGb:     30,
+		ContextWindow: 32768,
+		Description:   "Mistral Small 22B - 30GB VRAM, 32K context",
 	},
 
-	// CodeLlama (Code-Focused)
-	"codellama:latest": {
-		Name:          "codellama:latest",
-		MinVramGb:     35,
+	// CodeLlama (Meta - Latest, ≤40B only)
+	"codellama:7b": {
+		Name:          "codellama:7b",
+		MinVramGb:     15,
 		ContextWindow: 16384,
-		Description:   "CodeLlama 70B - 35GB VRAM, 16K context",
+		Description:   "CodeLlama 7B - 15GB VRAM, 16K context",
+	},
+	"codellama:13b": {
+		Name:          "codellama:13b",
+		MinVramGb:     20,
+		ContextWindow: 16384,
+		Description:   "CodeLlama 13B - 20GB VRAM, 16K context",
+	},
+	"codellama:34b": {
+		Name:          "codellama:34b",
+		MinVramGb:     50,
+		ContextWindow: 16384,
+		Description:   "CodeLlama 34B - 50GB VRAM, 16K context",
 	},
 }
 

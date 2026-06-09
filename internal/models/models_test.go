@@ -104,14 +104,14 @@ func TestRecommendGPUs(t *testing.T) {
 }
 
 func TestGetModelSpec_Default(t *testing.T) {
-	spec, err := GetModelSpec("gemma4:latest", nil)
+	spec, err := GetModelSpec("gemma4:12b", nil)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if spec.MinVramGb != 65 {
-		t.Errorf("expected 65GB for gemma4:latest, got %d", spec.MinVramGb)
+	if spec.MinVramGb != 18 {
+		t.Errorf("expected 18GB for gemma4:12b, got %d", spec.MinVramGb)
 	}
 }
 
