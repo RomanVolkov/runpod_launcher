@@ -174,3 +174,62 @@ func TestQuery_BadStatus(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestCreatePod(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"data": {
+				"podFindAndDeployOnDemand": {
+					"id": "pod-123",
+					"name": "test-pod",
+					"desiredStatus": "RUNNING",
+					"costPerHr": 0.75,
+					"imageName": "vllm/vllm-openai:latest",
+					"containerDiskInGb": 50
+				}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	client, _ := NewClientWithURL("test-key", server.URL)
+	input := &PodFindAndDeployInput{
+		GpuTypeID:         "A100",
+		ImageName:         "vllm/vllm-openai:latest",
+		Name:              "test-pod",
+		ContainerDiskInGb: 50,
+		GpuCount:          1,
+		StartSsh:          true,
+	}
+
+	pod, err := client.CreatePod(input)
+	if err != nil {
+		t.Fatalf("CreatePod error: %v", err)
+	}
+
+	if pod.ID != "pod-123" || pod.Name != "test-pod" {
+		t.Fatalf("unexpected pod data: %+v", pod)
+	}
+}
+
+func TestCreatePod_ErrorResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"errors": [{"message": "insufficient funds"}]
+		}`))
+	}))
+	defer server.Close()
+
+	client, _ := NewClientWithURL("test-key", server.URL)
+	input := &PodFindAndDeployInput{GpuTypeID: "A100"}
+	_, err := client.CreatePod(input)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if err.Error() != "graphql error: insufficient funds" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

@@ -178,3 +178,54 @@ func (c *Client) GetLowestPrice(input *GPULowestPriceInput) ([]GPUPriceInfo, err
 
 	return response.Data.GPUTypes.LowestPrice, nil
 }
+
+// CreatePod creates a pod on-demand using the podFindAndDeployOnDemand mutation
+func (c *Client) CreatePod(input *PodFindAndDeployInput) (*PodInfo, error) {
+	if input == nil {
+		return nil, fmt.Errorf("input required")
+	}
+
+	gqlInput := GraphQLInput{
+		Query: `
+		mutation CreatePod($input: PodFindAndDeployOnDemandInput!) {
+		  podFindAndDeployOnDemand(input: $input) {
+			id
+			name
+			desiredStatus
+			costPerHr
+			imageName
+			containerDiskInGb
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"input": input},
+	}
+
+	body, err := c.Query(gqlInput)
+	if err != nil {
+		return nil, err
+	}
+
+	var response struct {
+		Data struct {
+			Pod *PodInfo `json:"podFindAndDeployOnDemand"`
+		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse pod creation response: %w", err)
+	}
+
+	if len(response.Errors) > 0 {
+		return nil, fmt.Errorf("graphql error: %s", response.Errors[0].Message)
+	}
+
+	if response.Data.Pod == nil {
+		return nil, fmt.Errorf("pod creation returned empty response")
+	}
+
+	return response.Data.Pod, nil
+}

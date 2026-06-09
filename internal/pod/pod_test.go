@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/romanvolkov/runpod-launcher/internal/config"
+	"github.com/romanvolkov/runpod-launcher/internal/graphql"
 )
 
 // mockPodClient implements PodClient for testing without real CLI calls.
@@ -61,6 +62,18 @@ func withMockCLI(t *testing.T, fn func(apiKey string, args ...string) ([]byte, e
 	orig := RunpodCtlFn
 	t.Cleanup(func() { RunpodCtlFn = orig })
 	RunpodCtlFn = fn
+}
+
+// mockGraphQLClientCreator is a mock for creating GraphQL clients
+type mockGraphQLClientCreator struct {
+	createPodFn func(*graphql.PodFindAndDeployInput) (*graphql.PodInfo, error)
+}
+
+func (m *mockGraphQLClientCreator) CreatePod(input *graphql.PodFindAndDeployInput) (*graphql.PodInfo, error) {
+	if m.createPodFn != nil {
+		return m.createPodFn(input)
+	}
+	return nil, errors.New("createPodFn not set")
 }
 
 const shortTick = 10 * time.Millisecond
@@ -169,15 +182,26 @@ func TestWaitForReady_ErrorContinues(t *testing.T) {
 // ---- RunPodClient CLI tests using RunpodCtlFn mocking ----
 
 func TestRunPodClient_CreatePod_BuildsCorrectArgs(t *testing.T) {
-	var capturedArgs []string
-	var capturedAPIKey string
+	var capturedInput *graphql.PodFindAndDeployInput
 
-	withMockCLI(t, func(apiKey string, args ...string) ([]byte, error) {
-		capturedAPIKey = apiKey
-		capturedArgs = args
-		out, _ := json.Marshal(map[string]interface{}{"id": "pod-created-123", "desiredStatus": "RUNNING"})
-		return out, nil
-	})
+	// Mock GraphQL client
+	orig := NewGraphQLClientFn
+	t.Cleanup(func() { NewGraphQLClientFn = orig })
+
+	NewGraphQLClientFn = func(apiKey string) (GraphQLClientInterface, error) {
+		return &mockGraphQLClientCreator{
+			createPodFn: func(input *graphql.PodFindAndDeployInput) (*graphql.PodInfo, error) {
+				capturedInput = input
+				return &graphql.PodInfo{
+					ID:               "pod-created-123",
+					Name:             input.Name,
+					DesiredStatus:    "RUNNING",
+					ImageName:        input.ImageName,
+					ContainerDiskInGb: input.ContainerDiskInGb,
+				}, nil
+			},
+		}, nil
+	}
 
 	client := &RunPodClient{apiKey: "test-api-key"}
 	cfg := &config.Config{
@@ -196,22 +220,21 @@ func TestRunPodClient_CreatePod_BuildsCorrectArgs(t *testing.T) {
 	if id != "pod-created-123" {
 		t.Errorf("expected pod ID 'pod-created-123', got %q", id)
 	}
-	if capturedAPIKey != "test-api-key" {
-		t.Errorf("expected API key 'test-api-key', got %q", capturedAPIKey)
-	}
 
-	joined := strings.Join(capturedArgs, " ")
-	if !strings.Contains(joined, "pod create") {
-		t.Errorf("expected 'pod create' in args: %v", capturedArgs)
+	if capturedInput == nil {
+		t.Fatal("expected GraphQL input to be captured")
 	}
-	if !strings.Contains(joined, "AMPERE_16") {
-		t.Errorf("expected GPU ID in args: %v", capturedArgs)
+	if capturedInput.GpuTypeID != "AMPERE_16" {
+		t.Errorf("expected GPU ID 'AMPERE_16', got %q", capturedInput.GpuTypeID)
 	}
-	if !strings.Contains(joined, "--image") {
-		t.Errorf("expected '--image' in args: %v", capturedArgs)
+	if capturedInput.ImageName != "vllm/vllm-openai:latest" {
+		t.Errorf("expected image name 'vllm/vllm-openai:latest', got %q", capturedInput.ImageName)
 	}
-	if !strings.Contains(joined, "--ssh") {
-		t.Errorf("expected '--ssh' in args: %v", capturedArgs)
+	if !capturedInput.StartSsh {
+		t.Errorf("expected StartSsh to be true")
+	}
+	if capturedInput.VolumeMountPath != "/workspace" {
+		t.Errorf("expected volume mount path '/workspace', got %q", capturedInput.VolumeMountPath)
 	}
 }
 

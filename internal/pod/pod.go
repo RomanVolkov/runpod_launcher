@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/romanvolkov/runpod-launcher/internal/config"
+	"github.com/romanvolkov/runpod-launcher/internal/graphql"
 	"github.com/romanvolkov/runpod-launcher/internal/startup"
 )
 
@@ -68,6 +69,16 @@ var GetOllamaModelContextFunc = GetOllamaModelContext
 
 // WaitForModelReadyFunc is injected for testing; default calls WaitForModelReady.
 var WaitForModelReadyFunc = WaitForModelReady
+
+// GraphQLClientInterface defines the methods we need from a GraphQL client
+type GraphQLClientInterface interface {
+	CreatePod(input *graphql.PodFindAndDeployInput) (*graphql.PodInfo, error)
+}
+
+// NewGraphQLClientFn is injected for testing; default calls graphql.NewClient.
+var NewGraphQLClientFn = func(apiKey string) (GraphQLClientInterface, error) {
+	return graphql.NewClient(apiKey)
+}
 
 // RunPodClient implements PodClient using the runpodctl CLI.
 type RunPodClient struct {
@@ -163,12 +174,44 @@ func (c *RunPodClient) CreatePod(cfg *config.Config, llmAPIKey string) (string, 
 	}, "", "  ")
 	fmt.Fprintf(os.Stderr, "Creating pod with input:\n%s\n", string(inputJSON))
 
-	out, err := RunpodCtlFn(c.apiKey, args...)
+	// Create GraphQL client and use it for pod creation
+	gqlClient, err := NewGraphQLClientFn(c.apiKey)
 	if err != nil {
-		return "", fmt.Errorf("runpodctl pod create: %w\n%s", err, out)
+		return "", fmt.Errorf("failed to create GraphQL client: %w", err)
 	}
 
-	return parsePodID(out)
+	// Convert env map to GraphQL PodEnvVar list
+	var envVars []graphql.PodEnvVar
+	for k, v := range envMap {
+		envVars = append(envVars, graphql.PodEnvVar{Key: k, Value: v})
+	}
+
+	// Build pod creation input for GraphQL
+	gqlInput := &graphql.PodFindAndDeployInput{
+		CloudType:         "SECURE",
+		GpuTypeID:         cfg.GPUTypeID,
+		ImageName:         imageName,
+		Name:              podName,
+		Env:               envVars,
+		ContainerDiskInGb: diskGB,
+		VolumeMountPath:   volumePath,
+		Ports:             "8000/http",
+		StartSsh:          true,
+		GpuCount:          1,
+		MinCudaVersion:    cfg.CudaVersion,
+	}
+
+	// Use GraphQL mutation instead of runpodctl
+	pod, err := gqlClient.CreatePod(gqlInput)
+	if err != nil {
+		return "", fmt.Errorf("graphql pod creation failed: %w", err)
+	}
+
+	if pod == nil || pod.ID == "" {
+		return "", fmt.Errorf("pod creation returned empty ID")
+	}
+
+	return pod.ID, nil
 }
 
 func (c *RunPodClient) GetPodStatus(podID string) (*PodStatus, error) {
