@@ -37,20 +37,20 @@ var DefaultModels = map[string]ModelSpec{
 	"gemma4:12b": {
 		Name:          "gemma4:12b",
 		MinVramGb:     18,
-		ContextWindow: 8192,
-		Description:   "Google Gemma 4 12B - 18GB VRAM, 8K context",
+		ContextWindow: 131072,
+		Description:   "Google Gemma 4 12B - 18GB VRAM, 128K context",
 	},
 	"gemma4:26b": {
 		Name:          "gemma4:26b",
 		MinVramGb:     40,
-		ContextWindow: 8192,
-		Description:   "Google Gemma 4 26B - 40GB VRAM, 8K context",
+		ContextWindow: 262144,
+		Description:   "Google Gemma 4 26B - 40GB VRAM, 256K context",
 	},
 	"gemma4:31b": {
 		Name:          "gemma4:31b",
 		MinVramGb:     50,
-		ContextWindow: 8192,
-		Description:   "Google Gemma 4 31B - 50GB VRAM, 8K context",
+		ContextWindow: 262144,
+		Description:   "Google Gemma 4 31B - 50GB VRAM, 256K context",
 	},
 
 	// Llama 3.1 (Meta - Latest, ≤40B only)

@@ -113,6 +113,10 @@ func TestGetModelSpec_Default(t *testing.T) {
 	if spec.MinVramGb != 18 {
 		t.Errorf("expected 18GB for gemma4:12b, got %d", spec.MinVramGb)
 	}
+
+	if spec.ContextWindow != 131072 {
+		t.Errorf("expected 131072 (128K) context for gemma4:12b, got %d", spec.ContextWindow)
+	}
 }
 
 func TestGetModelSpec_Override(t *testing.T) {
