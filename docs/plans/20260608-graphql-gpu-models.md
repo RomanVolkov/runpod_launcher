@@ -59,12 +59,12 @@ This solves the core problem: GPU selection often fails because availability dat
 - Create: `internal/graphql/graphql.go`
 - Create: `internal/graphql/types.go`
 
-- [ ] Create GraphQL client struct with Query() method (bearer token auth)
-- [ ] Implement GPU types query: retrieve available GPUs with pricing
-- [ ] Implement lowest price query: query GPU pricing with filters (region, CUDA, etc.)
-- [ ] Add error handling for GraphQL errors and network failures
-- [ ] Write basic tests for GraphQL client queries (mock HTTP responses)
-- [ ] run tests - must pass before next task
+- [x] Create GraphQL client struct with Query() method (bearer token auth)
+- [x] Implement GPU types query: retrieve available GPUs with pricing
+- [x] Implement lowest price query: query GPU pricing with filters (region, CUDA, etc.)
+- [x] Add error handling for GraphQL errors and network failures
+- [x] Write basic tests for GraphQL client queries (mock HTTP responses)
+- [x] run tests - must pass before next task
 
 ### Task 2: Add model specs and GPU filtering logic with Ollama API support
 
@@ -75,15 +75,15 @@ This solves the core problem: GPU selection often fails because availability dat
 - Modify: `internal/config/config.go`
 - Modify: `internal/config/config.template.toml`
 
-- [ ] Define ModelSpec struct: name, minVramGb, contextWindow, description
-- [ ] Create Ollama API client: fetch model list from local/remote Ollama instance
-- [ ] Implement GetModelSpecs() function: query Ollama API for model metadata + fallback to hardcoded defaults
-- [ ] Create FilterGPUsByModel() function: returns GPUs suitable for model + context
-- [ ] Create RecommendGPUs() function: rank GPUs by suitability score
-- [ ] Add hardcoded model specs for common models (qwen, gemma, mistral, llama)
-- [ ] Add optional model_specs_override section to config (allow custom VRAM/context)
-- [ ] Write basic tests for model filtering, GPU recommendation, and Ollama API fallback
-- [ ] run tests - must pass before next task
+- [x] Define ModelSpec struct: name, minVramGb, contextWindow, description
+- [x] Create Ollama API client: fetch model list from local/remote Ollama instance
+- [x] Implement GetModelSpecs() function: query Ollama API for model metadata + fallback to hardcoded defaults
+- [x] Create FilterGPUsByModel() function: returns GPUs suitable for model + context
+- [x] Create RecommendGPUs() function: rank GPUs by suitability score
+- [x] Add hardcoded model specs for common models (qwen, gemma, mistral, llama)
+- [x] Add optional model_specs_override section to config (allow custom VRAM/context)
+- [x] Write basic tests for model filtering, GPU recommendation, and Ollama API fallback
+- [x] run tests - must pass before next task
 
 ### Task 3: Integrate GraphQL into GPU availability command
 
@@ -91,12 +91,12 @@ This solves the core problem: GPU selection often fails because availability dat
 - Modify: `cmd/runpod-launcher/availability.go`
 - Modify: `internal/pod/pod.go` - extend PodClient interface
 
-- [ ] Replace runpodctl CLI calls with GraphQL queries in availability command
-- [ ] Update GPU display: show pricing from GraphQL (no more $0.0000)
-- [ ] Add model filter option to availability command (--model flag)
-- [ ] When model specified, highlight suitable GPUs
-- [ ] Update availability output format to show model compatibility
-- [ ] run tests - must pass before next task
+- [x] Replace runpodctl CLI calls with GraphQL queries in availability command
+- [x] Update GPU display: show pricing from GraphQL (no more $0.0000)
+- [x] Add model filter option to availability command (--model flag)
+- [x] When model specified, highlight suitable GPUs
+- [x] Update availability output format to show model compatibility
+- [x] run tests - must pass before next task
 
 ### Task 4: Enhance `up` command with model selection and GPU recommendations
 
@@ -105,13 +105,13 @@ This solves the core problem: GPU selection often fails because availability dat
 - Modify: `cmd/runpod-launcher/gpu_selector.go`
 - Modify: `cmd/runpod-launcher/gpu_selector_tui.go`
 
-- [ ] Add model selection to `up` flow (before GPU selection)
-- [ ] If no model specified, prompt user to select from config models
-- [ ] Use GraphQL to fetch real-time GPU list (instead of runpodctl)
-- [ ] Pre-filter GPUs based on selected model's requirements
+- [x] Add model selection to `up` flow (before GPU selection)
+- [x] If no model specified, prompt user to select from config models
+- [x] Use GraphQL to fetch real-time GPU list (instead of runpodctl)
+- [x] Pre-filter GPUs based on selected model's requirements
 - [ ] Show GPU suitability score in TUI (green=good fit, yellow=marginal, red=not suitable)
 - [ ] Update TUI to display "Recommended for [model]" label on suitable GPUs
-- [ ] run tests - must pass before next task
+- [x] run tests - must pass before next task
 
 ### Task 5: Replace runpodctl with GraphQL in pod creation flow
 
@@ -119,11 +119,11 @@ This solves the core problem: GPU selection often fails because availability dat
 - Modify: `internal/pod/pod.go` - CreatePod implementation
 - Modify: Go module dependencies if needed
 
-- [ ] Add `podFindAndDeployOnDemand` GraphQL mutation to GraphQL client
-- [ ] Update CreatePod() to use GraphQL instead of runpodctl CLI
-- [ ] Maintain compatibility: still accept environment variables
-- [ ] Test pod creation with actual RunPod API
-- [ ] run tests - must pass before next task
+- [x] Add `podFindAndDeployOnDemand` GraphQL mutation to GraphQL client
+- [x] Update CreatePod() to use GraphQL instead of runpodctl CLI
+- [x] Maintain compatibility: still accept environment variables
+- [x] Test pod creation with actual RunPod API
+- [x] run tests - must pass before next task
 
 ### Task 6: Improve GPU validation with real-time availability
 
