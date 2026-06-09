@@ -131,22 +131,36 @@ func runUp(cmd *cobra.Command, args []string) error {
 }
 
 // validateGPUAvailable checks that the configured GPU is available in secure cloud.
-// Returns a helpful error message if the GPU is not available, suggesting the user
-// run the availability command to see what's deployable.
+// If unavailable, suggests suitable alternatives based on model requirements.
 func validateGPUAvailable(cmd *cobra.Command, client pod.PodClient, cfg *config.Config) error {
+	stderr := cmd.ErrOrStderr()
+	fmt.Fprintf(stderr, "Validating GPU availability...\n")
+
+	// Get GPU types from client (uses runpodctl for backward compatibility, can be mocked)
 	gpuTypes, err := client.GetGPUTypes()
 	if err != nil {
 		// Don't fail on availability check - just warn and continue
-		fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not validate GPU availability: %v\n", err)
+		fmt.Fprintf(stderr, "warning: could not validate GPU availability: %v\n", err)
 		return nil
 	}
 
+	// Check if selected GPU is available in secure cloud
 	for _, gpu := range gpuTypes {
-		if gpu.ID == cfg.GPUTypeID && gpu.SecureCloud {
+		if gpu.ID == cfg.GPUTypeID {
+			if !gpu.SecureCloud {
+				// GPU exists but only in community cloud
+				return fmt.Errorf(
+					"GPU %q is not available in secure cloud",
+					cfg.GPUTypeID,
+				)
+			}
+
 			if gpu.MaxGpuCountSecureCloud > 0 {
 				// GPU is available in secure cloud
+				fmt.Fprintf(stderr, "GPU %q is available (%dGB VRAM)\n", gpu.DisplayName, gpu.MemoryInGb)
 				return nil
 			}
+
 			// GPU is listed but has zero availability
 			return fmt.Errorf(
 				"GPU %q is currently unavailable (zero capacity in secure cloud). "+

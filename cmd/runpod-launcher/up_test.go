@@ -771,8 +771,8 @@ func TestValidateGPUAvailable_CommunityCloud(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for community-only GPU, got nil")
 	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("expected 'not found' in error, got: %v", err)
+	if !strings.Contains(err.Error(), "not available in secure cloud") {
+		t.Errorf("expected 'not available in secure cloud' in error, got: %v", err)
 	}
 }
 
