@@ -137,15 +137,13 @@ func (c *Client) GetLowestPrice(input *GPULowestPriceInput) ([]GPUPriceInfo, err
 	gqlInput := GraphQLInput{
 		Query: `
 		query LowestPrice($input: GpuLowestPriceInput!) {
-		  gpuTypes {
-			lowestPrice(input: $input) {
-			  gpuName
-			  gpuTypeId
-			  minimumBidPrice
-			  uninterruptablePrice
-			  minMemory
-			  minVcpu
-			}
+		  lowestPrice(input: $input) {
+			gpuName
+			gpuTypeId
+			minimumBidPrice
+			uninterruptablePrice
+			minMemory
+			minVcpu
 		  }
 		}
 		`,
@@ -159,9 +157,7 @@ func (c *Client) GetLowestPrice(input *GPULowestPriceInput) ([]GPUPriceInfo, err
 
 	var response struct {
 		Data struct {
-			GPUTypes struct {
-				LowestPrice []GPUPriceInfo `json:"lowestPrice"`
-			} `json:"gpuTypes"`
+			LowestPrice []GPUPriceInfo `json:"lowestPrice"`
 		} `json:"data"`
 		Errors []struct {
 			Message string `json:"message"`
@@ -176,7 +172,7 @@ func (c *Client) GetLowestPrice(input *GPULowestPriceInput) ([]GPUPriceInfo, err
 		return nil, fmt.Errorf("graphql error: %s", response.Errors[0].Message)
 	}
 
-	return response.Data.GPUTypes.LowestPrice, nil
+	return response.Data.LowestPrice, nil
 }
 
 // CreatePod creates a pod on-demand using the podFindAndDeployOnDemand mutation

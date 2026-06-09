@@ -86,18 +86,16 @@ func TestGetLowestPrice(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{
 			"data": {
-				"gpuTypes": {
-					"lowestPrice": [
-						{
-							"gpuName": "NVIDIA A100",
-							"gpuTypeId": "A100",
-							"minimumBidPrice": 0.85,
-							"uninterruptablePrice": 1.23,
-							"minMemory": 80,
-							"minVcpu": 12
-						}
-					]
-				}
+				"lowestPrice": [
+					{
+						"gpuName": "NVIDIA A100",
+						"gpuTypeId": "A100",
+						"minimumBidPrice": 0.85,
+						"uninterruptablePrice": 1.23,
+						"minMemory": 80,
+						"minVcpu": 12
+					}
+				]
 			}
 		}`))
 	}))
