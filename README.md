@@ -110,6 +110,56 @@ env_file_path = "~/.env"
 | `opencode_config_path` | OpenCode config file path | `~/.config/opencode/opencode.jsonc` |
 | `env_file_path` | Environment file for credentials | `~/.env` |
 
+## Advanced Features
+
+### Model Selection & GPU Filtering
+
+RunPod Launcher now provides intelligent GPU recommendations based on your selected model:
+
+```bash
+# Select a model interactively during `up`
+$ runpod-launcher up
+# You'll be prompted to choose from available models
+
+# Or specify a model in config.toml:
+model_name = "qwen3.6:27b"  # or "gemma:4", "mistral:latest", "llama3:70b"
+```
+
+**Supported Models (with automatic VRAM requirements):**
+- `qwen3.6:27b` — 70GB VRAM, 128K context
+- `qwen3.5:27b` — 55GB VRAM, 32K context  
+- `gemma:4` — 40GB VRAM, 256K context
+- `gemma2:27b` — 50GB VRAM, 8K context
+- `mistral:latest` — 20GB VRAM, 32K context
+- `llama3:70b` — 75GB VRAM, 8K context
+
+**Custom Model Specifications:**
+
+Add custom model specs to your config to override defaults:
+
+```toml
+[model_specs_override.custom_model]
+min_vram_gb = 60
+context_window = 32768
+description = "My custom model"
+```
+
+### GPU Suitability Scoring
+
+When you run `runpod-launcher availability --model "qwen3.6:27b"`, GPUs are scored:
+- **Green** — Sufficient VRAM + 10GB headroom (ideal)
+- **Yellow** — Meets minimum VRAM but tight on memory (risky)
+- **Red** — Insufficient VRAM (won't work)
+
+### GraphQL API Integration
+
+RunPod Launcher now uses RunPod's GraphQL API directly for:
+- **Real-time GPU availability** — Eliminates stale inventory data
+- **Accurate pricing** — Direct from RunPod, updated frequently
+- **Pod creation** — Faster, more reliable than CLI wrapper
+
+This provides better reliability and eliminates the runpodctl dependency for core operations.
+
 ## CLI Commands
 
 ### `runpod-launcher init`
@@ -197,24 +247,27 @@ API Key: your-generated-api-key
 
 ### `runpod-launcher availability`
 
-List deployable GPU types filtered by your config constraints (region, CUDA version, secure cloud). Shows only GPUs you can actually deploy with `up`.
+List deployable GPU types with real-time pricing and optional model suitability filtering.
 
 ```bash
-# Show available GPUs based on config (secure cloud, your region, your CUDA version)
+# Show available GPUs (secure cloud only, sorted by price)
 runpod-launcher availability
 
-# Override region for this query
-runpod-launcher availability --region "US-WEST"
+# Filter and highlight GPUs suitable for a specific model
+runpod-launcher availability --model "qwen3.6:27b"
 
-# Override CUDA version for this query
-runpod-launcher availability --cuda-version "12.1"
-
-# Override both
-runpod-launcher availability --region "EU" --cuda-version "13.0"
+# Combine with other options
+runpod-launcher availability --model "mistral:latest"
 
 # Output as JSON
 runpod-launcher availability --json
 ```
+
+**GPU Suitability Column (when using --model):**
+- Shows which GPUs meet the model's minimum VRAM requirement
+- Green ✓ = Suitable (meets requirement + 10GB headroom)
+- Yellow ⚠ = Marginal (meets requirement but tight)
+- Red ✗ = Not suitable (insufficient VRAM)
 
 **Applied Filters (from config, unless overridden by flags):**
 - **Cloud:** Always Secure Cloud (matches `up` behavior)
