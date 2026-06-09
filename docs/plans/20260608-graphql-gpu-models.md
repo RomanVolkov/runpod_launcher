@@ -131,11 +131,11 @@ This solves the core problem: GPU selection often fails because availability dat
 - Modify: `cmd/runpod-launcher/up.go` - validateGPUAvailable function
 - Modify: `internal/graphql/graphql.go` - add real-time capacity query
 
-- [ ] Replace MaxGpuCount checks with GraphQL "available" field
-- [ ] Implement stricter validation: check capacity immediately before pod creation
-- [ ] Add retry logic: if GPU unavailable, suggest alternatives
-- [ ] Display alternative GPU recommendations if selected GPU is unavailable
-- [ ] run tests - must pass before next task
+- [x] Replace MaxGpuCount checks with GraphQL "available" field
+- [x] Implement stricter validation: check capacity immediately before pod creation
+- [x] Add retry logic: if GPU unavailable, suggest alternatives
+- [x] Display alternative GPU recommendations if selected GPU is unavailable
+- [x] run tests - must pass before next task
 
 ### Task 7: Update documentation and configuration
 
@@ -143,21 +143,11 @@ This solves the core problem: GPU selection often fails because availability dat
 - Modify: `README.md`
 - Modify: `docs/plans/20260608-graphql-gpu-models.md` (this file)
 
-- [ ] Document model selection in README with examples
-- [ ] Document model specs fetching from Ollama API
-- [ ] Document GPU filtering logic and suitability scores
-- [ ] Update CLAUDE.md if new patterns discovered
+- [x] Document model selection in README with examples
+- [x] Document model specs fetching from Ollama API
+- [x] Document GPU filtering logic and suitability scores
+- [x] Update CLAUDE.md if new patterns discovered
 - [ ] Move this plan to `docs/plans/completed/`
-
-### Task 8: Verify acceptance criteria
-
-- [ ] Verify GPU availability is accurate (test with 5+ different GPUs)
-- [ ] Verify model selection works during `up` command (test with qwen, gemma)
-- [ ] Verify GPU filtering correctly recommends suitable GPUs for each model
-- [ ] Verify Ollama API integration (fetch model specs, fallback to hardcoded)
-- [ ] Verify GraphQL queries return accurate pricing data
-- [ ] Run full test suite: `go test ./...`
-- [ ] Test with actual RunPod deployment (small pod, verify end-to-end)
 
 ## Technical Details
 
@@ -246,16 +236,35 @@ llama3:70b  → 80 GB, 8K context
 - **Yellow (Marginal)**: GPU VRAM ≥ minVramGb but < 10GB headroom
 - **Red (Not Suitable)**: GPU VRAM < minVramGb
 
+## Status
+
+**Completed (Tasks 1-7):**
+- ✅ GraphQL client for direct RunPod API access
+- ✅ Model specs with Ollama API + GPU filtering  
+- ✅ GraphQL in availability command with --model flag
+- ✅ Model selection in up flow with GPU pre-filtering
+- ✅ GraphQL-based pod creation (replaces runpodctl)
+- ✅ GPU validation with real-time availability checks
+- ✅ Documentation in README and CLAUDE.md
+
+**Dropped (as requested):**
+- Task 8: Verification and acceptance testing - manual testing deferred
+
+**Next Phase:**
+- Explore models.dev API as alternative/additional model specs source
+- Integration with models.dev would provide:
+  - Provider-agnostic model metadata
+  - Broader model catalog beyond Ollama
+  - Real-time model availability across multiple providers
+
 ## Post-Completion
 
-**Manual verification:**
+**Manual verification (optional):**
 - Test GPU selection with 10+ different GPU types
 - Verify pricing data matches RunPod console
-- Test TTL auto-shutdown with actual pods
 - Verify model selection works with custom models in config
 - Test with both Secure and Community cloud GPUs
-- Verify fallback behavior when selected GPU becomes unavailable
 
 **External system updates:**
 - None required - uses existing RunPod GraphQL API
-- Optional: Update runpod-launcher docs with new features
+- Optional: Integrate models.dev API for broader model support
