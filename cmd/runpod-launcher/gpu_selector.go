@@ -114,7 +114,7 @@ func isTerminal(f *os.File) bool {
 	return (stat.Mode() & os.ModeCharDevice) != 0
 }
 
-// promptForModelSelection allows user to interactively select a model.
+// promptForModelSelection allows user to interactively select a model using TUI.
 // Always prompts for model selection, even if one is already configured.
 // Returns true if model was selected/confirmed interactively, false otherwise.
 func promptForModelSelection(cmd *cobra.Command, cfg *config.Config) (bool, error) {
@@ -142,41 +142,25 @@ func promptForModelSelection(cmd *cobra.Command, cfg *config.Config) (bool, erro
 			// Keep current model
 			return false, nil
 		}
-		// User wants to select a different model, fall through to selection
+		// User wants to select a different model, fall through to TUI selection
 	}
 
-	// Present model selection
-	fmt.Fprintf(stderr, "\nAvailable models:\n")
-	for i, m := range availableModels {
-		fmt.Fprintf(stderr, "  %d. %s\n", i+1, m)
+	// Build a map of model specs for display
+	modelSpecsMap := make(map[string]models.ModelSpec)
+	for _, modelName := range availableModels {
+		spec, _ := models.GetModelSpec(modelName, cfg.ModelSpecsOverride)
+		modelSpecsMap[modelName] = spec
 	}
 
-	// Find index of current model to use as default
-	defaultChoice := 1
-	if cfg.ModelName != "" {
-		for i, m := range availableModels {
-			if m == cfg.ModelName {
-				defaultChoice = i + 1
-				break
-			}
-		}
+	// Use interactive TUI for model selection
+	fmt.Fprintf(stderr, "\n")
+	selectedModel, err := selectModelTUI(availableModels, modelSpecsMap)
+	if err != nil {
+		return false, err
 	}
 
-	fmt.Fprintf(stderr, "\nSelect a model (1-%d) [%d]: ", len(availableModels), defaultChoice)
-	var input string
-	_, err := fmt.Scanln(&input)
-	if err != nil || input == "" {
-		input = fmt.Sprintf("%d", defaultChoice)
-	}
-
-	var choice int
-	_, err = fmt.Sscanf(input, "%d", &choice)
-	if err != nil || choice < 1 || choice > len(availableModels) {
-		choice = defaultChoice
-	}
-
-	cfg.ModelName = availableModels[choice-1]
-	fmt.Fprintf(stderr, "Selected model: %s\n", cfg.ModelName)
+	cfg.ModelName = selectedModel
+	fmt.Fprintf(stderr, "\nSelected model: %s\n", cfg.ModelName)
 	return true, nil
 }
 
