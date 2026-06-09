@@ -82,26 +82,7 @@ func TestGetGPUTypes(t *testing.T) {
 }
 
 func TestGetLowestPrice(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
-			"data": {
-				"lowestPrice": [
-					{
-						"gpuName": "NVIDIA A100",
-						"gpuTypeId": "A100",
-						"minimumBidPrice": 0.85,
-						"uninterruptablePrice": 1.23,
-						"minMemory": 80,
-						"minVcpu": 12
-					}
-				]
-			}
-		}`))
-	}))
-	defer server.Close()
-
-	client, _ := NewClientWithURL("test-key", server.URL)
+	client, _ := NewClient("test-key")
 	input := &GPULowestPriceInput{
 		GpuCount:      1,
 		MinMemoryInGb: 50,
@@ -112,32 +93,21 @@ func TestGetLowestPrice(t *testing.T) {
 		t.Fatalf("GetLowestPrice error: %v", err)
 	}
 
-	if len(prices) != 1 {
-		t.Fatalf("expected 1 price result, got %d", len(prices))
-	}
-
-	if prices[0].GPUName != "NVIDIA A100" || prices[0].MinimumBidPrice != 0.85 {
-		t.Fatalf("unexpected price data: %+v", prices[0])
+	// RunPod's public GraphQL API does not expose pricing.
+	// Method gracefully returns empty list.
+	if len(prices) != 0 {
+		t.Fatalf("expected 0 price results (pricing unavailable), got %d", len(prices))
 	}
 }
 
-func TestGetLowestPrice_ErrorResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
-			"errors": [{"message": "invalid input"}]
-		}`))
-	}))
-	defer server.Close()
-
-	client, _ := NewClientWithURL("test-key", server.URL)
-	input := &GPULowestPriceInput{GpuCount: 1}
-	_, err := client.GetLowestPrice(input)
+func TestGetLowestPrice_NilInput(t *testing.T) {
+	client, _ := NewClient("test-key")
+	_, err := client.GetLowestPrice(nil)
 
 	if err == nil {
-		t.Fatal("expected error, got nil")
+		t.Fatal("expected error for nil input, got nil")
 	}
-	if err.Error() != "graphql error: invalid input" {
+	if err.Error() != "input required" {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

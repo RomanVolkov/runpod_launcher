@@ -129,50 +129,16 @@ func (c *Client) GetGPUTypes() ([]GPUTypeInfo, error) {
 }
 
 // GetLowestPrice queries GPU pricing with filters
+// Note: RunPod's public GraphQL API does not expose pricing data.
+// This method returns empty pricing and is kept for future API compatibility.
 func (c *Client) GetLowestPrice(input *GPULowestPriceInput) ([]GPUPriceInfo, error) {
 	if input == nil {
 		return nil, fmt.Errorf("input required")
 	}
 
-	gqlInput := GraphQLInput{
-		Query: `
-		query LowestPrice($input: GpuLowestPriceInput!) {
-		  lowestPrice(input: $input) {
-			gpuName
-			gpuTypeId
-			minimumBidPrice
-			uninterruptablePrice
-			minMemory
-			minVcpu
-		  }
-		}
-		`,
-		Variables: map[string]interface{}{"input": input},
-	}
-
-	body, err := c.Query(gqlInput)
-	if err != nil {
-		return nil, err
-	}
-
-	var response struct {
-		Data struct {
-			LowestPrice []GPUPriceInfo `json:"lowestPrice"`
-		} `json:"data"`
-		Errors []struct {
-			Message string `json:"message"`
-		} `json:"errors"`
-	}
-
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse lowestPrice response: %w", err)
-	}
-
-	if len(response.Errors) > 0 {
-		return nil, fmt.Errorf("graphql error: %s", response.Errors[0].Message)
-	}
-
-	return response.Data.LowestPrice, nil
+	// Pricing is not available through the public GraphQL API
+	// Return empty list so callers can gracefully show N/A
+	return []GPUPriceInfo{}, nil
 }
 
 // CreatePod creates a pod on-demand using the podFindAndDeployOnDemand mutation
