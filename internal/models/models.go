@@ -34,23 +34,11 @@ type GPUSuitability struct {
 // DefaultModels contains hardcoded specs for common models
 var DefaultModels = map[string]ModelSpec{
 	// Qwen models
-	"qwen3.6:7b": {
-		Name:          "qwen3.6:7b",
-		MinVramGb:     20,
-		ContextWindow: 131072,
-		Description:   "Qwen3.6 7B - 20GB VRAM, 128K context",
-	},
 	"qwen3.6:27b": {
 		Name:          "qwen3.6:27b",
 		MinVramGb:     70,
 		ContextWindow: 131072,
 		Description:   "Qwen3.6 27B - 70GB VRAM, 128K context",
-	},
-	"qwen3.6:32b": {
-		Name:          "qwen3.6:32b",
-		MinVramGb:     90,
-		ContextWindow: 131072,
-		Description:   "Qwen3.6 32B - 90GB VRAM, 128K context",
 	},
 	"qwen3.5:27b": {
 		Name:          "qwen3.5:27b",
@@ -65,18 +53,6 @@ var DefaultModels = map[string]ModelSpec{
 		MinVramGb:     40,
 		ContextWindow: 262144,
 		Description:   "Gemma 4 - 40GB VRAM, 256K context",
-	},
-	"gemma4:35": {
-		Name:          "gemma4:35",
-		MinVramGb:     65,
-		ContextWindow: 32768,
-		Description:   "Gemma4 35B - 65GB VRAM, 32K context",
-	},
-	"gemma4:37": {
-		Name:          "gemma4:37",
-		MinVramGb:     70,
-		ContextWindow: 32768,
-		Description:   "Gemma4 37B - 70GB VRAM, 32K context",
 	},
 	"gemma2:27b": {
 		Name:          "gemma2:27b",
@@ -99,20 +75,6 @@ var DefaultModels = map[string]ModelSpec{
 		MinVramGb:     75,
 		ContextWindow: 8192,
 		Description:   "Llama3 70B - 75GB VRAM, 8K context",
-	},
-
-	// Kimi models (Chinese LLM)
-	"kimi": {
-		Name:          "kimi",
-		MinVramGb:     50,
-		ContextWindow: 32768,
-		Description:   "Kimi - 50GB VRAM, 32K context",
-	},
-	"kimi-chat": {
-		Name:          "kimi-chat",
-		MinVramGb:     50,
-		ContextWindow: 32768,
-		Description:   "Kimi Chat - 50GB VRAM, 32K context",
 	},
 }
 
