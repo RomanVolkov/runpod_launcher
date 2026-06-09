@@ -143,6 +143,35 @@ func TestGetModelSpec_NotFound(t *testing.T) {
 	}
 }
 
+func TestModelsDevToSpec(t *testing.T) {
+	dev := ModelsDev{
+		ID:          "meta-llama/llama-3.1-70b",
+		Name:        "Llama 3.1 70B",
+		Family:      "llama-3.1",
+		OpenWeights: true,
+	}
+	dev.Limit.Context = 131072
+	dev.Limit.Output = 4096
+
+	spec := modelsDevToSpec("meta-llama/llama-3.1-70b", dev)
+
+	if spec.Name != "Llama 3.1 70B" {
+		t.Errorf("expected name 'Llama 3.1 70B', got %q", spec.Name)
+	}
+
+	if spec.ContextWindow != 131072 {
+		t.Errorf("expected context 131072, got %d", spec.ContextWindow)
+	}
+
+	if spec.MinVramGb < 50 || spec.MinVramGb > 200 {
+		t.Errorf("expected VRAM in range [50, 200], got %d", spec.MinVramGb)
+	}
+
+	if spec.Description == "" {
+		t.Error("expected non-empty description")
+	}
+}
+
 func TestListAvailableModels(t *testing.T) {
 	overrides := map[string]ModelSpec{
 		"custom:model": {Name: "custom:model"},

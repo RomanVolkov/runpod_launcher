@@ -3,7 +3,10 @@ package models
 import (
 	"fmt"
 	"sort"
+	"time"
 )
+
+var modelsDevClient = NewModelsDevClient(5 * time.Minute)
 
 // ModelSpec represents specifications for an LLM model
 type ModelSpec struct {
@@ -129,7 +132,10 @@ func ValidateModel(modelName string, overrides map[string]ModelSpec) error {
 	return fmt.Errorf("unknown model: %s", modelName)
 }
 
-// GetModelSpec retrieves model specs with override support
+// GetModelSpec retrieves model specs with fallback chain:
+// 1. Config overrides
+// 2. models.dev API (with caching)
+// 3. Hardcoded defaults
 func GetModelSpec(modelName string, overrides map[string]ModelSpec) (ModelSpec, error) {
 	if spec, ok := overrides[modelName]; ok {
 		return spec, nil
@@ -137,7 +143,25 @@ func GetModelSpec(modelName string, overrides map[string]ModelSpec) (ModelSpec, 
 	if spec, ok := DefaultModels[modelName]; ok {
 		return spec, nil
 	}
+
+	// Try models.dev API (non-blocking fallback)
+	modelsDev, err := modelsDevClient.GetModel(modelName)
+	if err == nil {
+		return modelsDevToSpec(modelName, modelsDev), nil
+	}
+
 	return ModelSpec{}, fmt.Errorf("model not found: %s", modelName)
+}
+
+// modelsDevToSpec converts a ModelsDev response to ModelSpec format
+func modelsDevToSpec(modelID string, dev ModelsDev) ModelSpec {
+	vramEst := EstimateVRAM(modelID, dev)
+	return ModelSpec{
+		Name:          dev.Name,
+		MinVramGb:     vramEst,
+		ContextWindow: dev.Limit.Context,
+		Description:   fmt.Sprintf("%s (context: %d, open weights: %v)", dev.Name, dev.Limit.Context, dev.OpenWeights),
+	}
 }
 
 // ListAvailableModels returns all available model names
