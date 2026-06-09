@@ -180,42 +180,37 @@ func promptForModelSelection(cmd *cobra.Command, cfg *config.Config) (bool, erro
 	return true, nil
 }
 
-// promptForGPUSelection asks the user if they want to select a different GPU.
-// If upSelectGPU flag is set, skips the confirmation and goes directly to selection.
+// promptForGPUSelection allows user to interactively select a GPU.
+// Always offers GPU selection after model is chosen, with pre-filtering based on model.
 // Skips interactive prompts in JSON mode or when stdin is not a terminal.
 func promptForGPUSelection(cmd *cobra.Command, client pod.PodClient, cfg *config.Config) error {
 	stderr := cmd.ErrOrStderr()
 
-	// Skip interactive prompts in JSON mode or when forced to select
-	var shouldSelectGPU bool
-
-	if upSelectGPU {
-		// Force GPU selection
-		shouldSelectGPU = true
-	} else if upJSON {
-		// Skip interactive prompts in JSON mode
+	// Skip interactive prompts in JSON mode or when stdin is not a terminal
+	if upJSON || !isTerminal(os.Stdin) {
 		return nil
-	} else if !isTerminal(os.Stdin) {
-		// Skip interactive prompts when stdin is not a terminal (tests, pipes, etc)
-		return nil
-	} else {
-		// Ask user interactively
-		fmt.Fprintf(stderr, "\nCurrent GPU: %s\n", cfg.GPUTypeID)
-		fmt.Fprintf(stderr, "Do you want to select a different GPU? (y/n) [n]: ")
+	}
 
-		var input string
-		_, err := fmt.Scanln(&input)
-		if err != nil || input == "" || (input != "y" && input != "Y" && input != "yes" && input != "YES") {
-			return nil // Don't select, use current GPU
+	// Get model spec for pre-filtering and display
+	modelSpec, _ := models.GetModelSpec(cfg.ModelName, cfg.ModelSpecsOverride)
+
+	// Always offer GPU selection with model context
+	fmt.Fprintf(stderr, "\nSelecting GPU for %s (%dGB VRAM min, %d token context):\n",
+		cfg.ModelName, modelSpec.MinVramGb, modelSpec.ContextWindow)
+	fmt.Fprintf(stderr, "Current GPU: %s\n", cfg.GPUTypeID)
+	fmt.Fprintf(stderr, "Select a different GPU? (y/n) [n]: ")
+
+	var input string
+	_, err := fmt.Scanln(&input)
+	if err != nil || input == "" || (input != "y" && input != "Y" && input != "yes" && input != "YES") {
+		if upSelectGPU {
+			// Force selection mode flag still applies
+			fmt.Fprintf(stderr, "Using: %s\n", cfg.GPUTypeID)
 		}
-		shouldSelectGPU = true
+		return nil // Keep current GPU
 	}
 
-	if !shouldSelectGPU {
-		return nil
-	}
-
-	// User wants to select a GPU
+	// User wants to select a GPU - show options with model pre-filtering
 	selectedGPU, err := selectGPUType(cmd, client, cfg.GPUTypeID, cfg.Region, cfg.CudaVersion, cfg.ModelName, cfg.ModelSpecsOverride)
 	if err != nil {
 		return fmt.Errorf("failed to select GPU: %w", err)
