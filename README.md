@@ -112,40 +112,74 @@ env_file_path = "~/.env"
 
 ## Advanced Features
 
+### Interactive Model Selection TUI
+
+When you run `runpod-launcher up`, you'll be presented with an interactive model selector showing all available models with their VRAM requirements and context window sizes:
+
+```
+┌─ Select Model
+│  ↑/↓ or k/j: navigate | Enter: select | /: filter | q: quit
+│
+│  → codellama:7b         15GB VRAM   16K context
+│    codellama:13b        20GB VRAM   16K context
+│    codellama:34b        50GB VRAM   16K context
+│    gemma4:12b           18GB VRAM  128K context
+│    gemma4:26b           40GB VRAM  256K context
+│    gemma4:31b           50GB VRAM  256K context
+│    llama3.1:8b          15GB VRAM  128K context
+│    mistral:7b           15GB VRAM   32K context
+│    mistral-small:12b    18GB VRAM   32K context
+│    mistral-small:22b    30GB VRAM   32K context
+│    qwen3.6:7b           15GB VRAM  256K context
+│    qwen3.6:27b          50GB VRAM  256K context
+│    qwen3.6:32b          60GB VRAM  256K context
+```
+
+**Navigation:**
+- `↑` / `↓` or `j` / `k` — Navigate through models
+- `/` — Enter filter mode to search by model name
+- `Enter` — Select highlighted model
+- `q` or `ctrl+c` — Cancel
+
 ### Model Selection & GPU Filtering
 
-RunPod Launcher now provides intelligent GPU recommendations based on your selected model:
+RunPod Launcher provides intelligent GPU recommendations based on your selected model:
 
 ```bash
-# Select a model interactively during `up`
+# Interactive model selection during `up`
 $ runpod-launcher up
-# You'll be prompted to choose from available models
+# TUI displays all models with specs
 
 # Or specify a model in config.toml:
-model_name = "qwen3.6:27b"  # or "gemma:4", "mistral:latest", "llama3:70b"
+model_name = "qwen3.6:27b"
 ```
 
 **Model Specs Resolution Chain:**
 
 When you specify a model, specs are resolved in this order:
 1. **Config overrides** — Custom specs in `[model_specs_override]`
-2. **Hardcoded defaults** — Common Ollama models (qwen, gemma, mistral, llama)
+2. **Hardcoded defaults** — Latest Ollama models (≤40B parameters only)
 3. **models.dev API** — 100K+ models with real metadata (cached 5 minutes)
 
 This means you can use any model from [models.dev](https://models.dev) catalog!
 
-**Builtin Models (with automatic VRAM requirements):**
-- `qwen3.6:27b` — 70GB VRAM, 128K context
-- `qwen3.5:27b` — 55GB VRAM, 32K context  
-- `gemma:4` — 40GB VRAM, 256K context
-- `gemma2:27b` — 50GB VRAM, 8K context
-- `mistral:latest` — 20GB VRAM, 32K context
-- `llama3:70b` — 75GB VRAM, 8K context
+**Latest Generation Builtin Models (verified from Ollama Library):**
 
-**Models from models.dev (examples, any model ID works):**
-- `meta-llama/llama-3.1-70b` — Auto-fetched from models.dev
-- `mistral-ai/Mistral-7B-Instruct-v0.3` — Auto-fetched from models.dev
-- `allenai/OLMo-7B-hf` — Auto-fetched from models.dev
+| Model | Size | VRAM | Context | Use Case |
+|-------|------|------|---------|----------|
+| `gemma4:12b` | 12B | 18GB | 128K | Fast inference, moderate accuracy |
+| `gemma4:26b` | 26B | 40GB | 256K | Balanced performance & accuracy |
+| `gemma4:31b` | 31B | 50GB | 256K | High accuracy for A100 |
+| `llama3.1:8b` | 8B | 15GB | 128K | Lightweight, versatile |
+| `qwen3.6:7b` | 7B | 15GB | 256K | Fast with long context |
+| `qwen3.6:27b` | 27B | 50GB | 256K | Premium quality (Recommended) |
+| `qwen3.6:32b` | 32B | 60GB | 256K | Maximum quality for large GPUs |
+| `mistral:7b` | 7B | 15GB | 32K | Fast, instruction-following |
+| `mistral-small:12b` | 12B | 18GB | 32K | Balanced Mistral variant |
+| `mistral-small:22b` | 22B | 30GB | 32K | Larger Mistral option |
+| `codellama:7b` | 7B | 15GB | 16K | Code generation |
+| `codellama:13b` | 13B | 20GB | 16K | Better code understanding |
+| `codellama:34b` | 34B | 50GB | 16K | Advanced code tasks |
 
 **Custom Model Specifications:**
 
@@ -427,20 +461,36 @@ runpod-launcher/
 
 ## Supported Models
 
-Any model from [Ollama Library](https://ollama.com/library):
+RunPod Launcher includes 13 latest-generation models (≤40B parameters) from the [Ollama Library](https://ollama.com/library):
 
-- **Qwen** (default): `qwen3.6:27b`, `qwen3.5-9b`, `qwen2:7b`
-- **Gemma**: `gemma:2`, `gemma:4`
-- **Mistral**: `mistral`, `mistral-openorca`
-- **Llama**: `llama2`, `llama2-uncensored`, `llama3:8b`
-- **Neural Chat**: `neural-chat`
-- **Dolphin**: `dolphin-mixtral`
-- And 100+ more...
+**Recommended Models:**
+- `qwen3.6:27b` — Premium quality with 256K context (default recommendation)
+- `gemma4:26b` — Google's latest with 256K context, balanced for A100
+- `llama3.1:8b` — Meta's lightweight option with 128K context
 
-**Memory Guidance for A100 80GB:**
-- **Qwen3.6:27B** (51GB weights) + 128K context = ~80GB total ✓ Fits perfectly
-- Smaller models (7B-13B) can use larger context windows (256K+)
-- For smaller GPUs (24-48GB), use smaller models (7B-13B) or quantization
+**All Built-in Models:**
+- **Gemma 4**: `gemma4:12b` (128K context), `gemma4:26b` (256K), `gemma4:31b` (256K)
+- **Qwen 3.6**: `qwen3.6:7b` (256K context), `qwen3.6:27b` (256K), `qwen3.6:32b` (256K)
+- **Llama 3.1**: `llama3.1:8b` (128K context)
+- **Mistral**: `mistral:7b` (32K context), `mistral-small:12b` (32K), `mistral-small:22b` (32K)
+- **CodeLlama**: `codellama:7b` (16K context), `codellama:13b` (16K), `codellama:34b` (16K)
+
+**Models from models.dev:**
+You can also use any model ID from [models.dev](https://models.dev) — specs will be auto-fetched:
+- `meta-llama/llama-3.1-70b` — Auto-fetched from models.dev
+- `mistral-ai/Mistral-7B-Instruct-v0.3` — Auto-fetched from models.dev
+- `allenai/OLMo-7B-hf` — Auto-fetched from models.dev
+
+**Memory Guidance:**
+
+| GPU | Recommended Model | Notes |
+|-----|-------------------|-------|
+| **H100 80GB+** | `qwen3.6:32b` | Maximum quality inference |
+| **A100 80GB** | `qwen3.6:27b` (50GB weights) | 256K context, perfectly fitted |
+| **RTX 6000 Ada 48GB** | `gemma4:26b` or `qwen3.6:27b` | With careful context window tuning |
+| **L40S 48GB** | `gemma4:26b` | Good balance of quality and VRAM |
+| **RTX 4090 24GB** | `mistral:7b`, `codellama:7b` | Fast inference for coding/chat |
+| **Smaller GPUs <20GB** | `gemma4:12b`, `llama3.1:8b` | Lightweight options
 
 ## Testing
 
