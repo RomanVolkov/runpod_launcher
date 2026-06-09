@@ -65,20 +65,20 @@ var DefaultModels = map[string]ModelSpec{
 	"qwen3.6:7b": {
 		Name:          "qwen3.6:7b",
 		MinVramGb:     15,
-		ContextWindow: 131072,
-		Description:   "Alibaba Qwen 3.6 7B - 15GB VRAM, 128K context",
+		ContextWindow: 262144,
+		Description:   "Alibaba Qwen 3.6 7B - 15GB VRAM, 256K context",
 	},
 	"qwen3.6:27b": {
 		Name:          "qwen3.6:27b",
 		MinVramGb:     50,
-		ContextWindow: 131072,
-		Description:   "Alibaba Qwen 3.6 27B - 50GB VRAM, 128K context",
+		ContextWindow: 262144,
+		Description:   "Alibaba Qwen 3.6 27B - 50GB VRAM, 256K context",
 	},
 	"qwen3.6:32b": {
 		Name:          "qwen3.6:32b",
 		MinVramGb:     60,
-		ContextWindow: 131072,
-		Description:   "Alibaba Qwen 3.6 32B - 60GB VRAM, 128K context",
+		ContextWindow: 262144,
+		Description:   "Alibaba Qwen 3.6 32B - 60GB VRAM, 256K context",
 	},
 
 	// Mistral Large 3 (European - Latest, ≤40B)
