@@ -114,15 +114,11 @@ func isTerminal(f *os.File) bool {
 	return (stat.Mode() & os.ModeCharDevice) != 0
 }
 
-// promptForModelSelection allows user to select a model (if none configured)
-// Returns true if model was selected interactively, false otherwise
+// promptForModelSelection allows user to interactively select a model.
+// Always prompts for model selection, even if one is already configured.
+// Returns true if model was selected/confirmed interactively, false otherwise.
 func promptForModelSelection(cmd *cobra.Command, cfg *config.Config) (bool, error) {
 	stderr := cmd.ErrOrStderr()
-
-	// Skip if model already set in config
-	if cfg.ModelName != "" {
-		return false, nil
-	}
 
 	// Skip interactive prompts in JSON mode or when stdin is not a terminal
 	if upJSON || !isTerminal(os.Stdin) {
@@ -135,22 +131,48 @@ func promptForModelSelection(cmd *cobra.Command, cfg *config.Config) (bool, erro
 		return false, nil
 	}
 
+	// If a model is already configured, ask if user wants to change it
+	if cfg.ModelName != "" {
+		fmt.Fprintf(stderr, "\nCurrent model: %s\n", cfg.ModelName)
+		fmt.Fprintf(stderr, "Select a different model? (y/n) [n]: ")
+
+		var input string
+		_, err := fmt.Scanln(&input)
+		if err != nil || input == "" || (input != "y" && input != "Y" && input != "yes" && input != "YES") {
+			// Keep current model
+			return false, nil
+		}
+		// User wants to select a different model, fall through to selection
+	}
+
+	// Present model selection
 	fmt.Fprintf(stderr, "\nAvailable models:\n")
 	for i, m := range availableModels {
 		fmt.Fprintf(stderr, "  %d. %s\n", i+1, m)
 	}
 
-	fmt.Fprintf(stderr, "\nSelect a model (1-%d) [1]: ", len(availableModels))
+	// Find index of current model to use as default
+	defaultChoice := 1
+	if cfg.ModelName != "" {
+		for i, m := range availableModels {
+			if m == cfg.ModelName {
+				defaultChoice = i + 1
+				break
+			}
+		}
+	}
+
+	fmt.Fprintf(stderr, "\nSelect a model (1-%d) [%d]: ", len(availableModels), defaultChoice)
 	var input string
 	_, err := fmt.Scanln(&input)
 	if err != nil || input == "" {
-		input = "1"
+		input = fmt.Sprintf("%d", defaultChoice)
 	}
 
 	var choice int
 	_, err = fmt.Sscanf(input, "%d", &choice)
 	if err != nil || choice < 1 || choice > len(availableModels) {
-		choice = 1
+		choice = defaultChoice
 	}
 
 	cfg.ModelName = availableModels[choice-1]
