@@ -1,6 +1,8 @@
-# models.dev Integration Proposal
+# models.dev Integration
 
 ## Overview
+
+✅ **COMPLETED** — models.dev is now integrated as a fallback model specs source.
 
 models.dev provides a comprehensive, provider-agnostic catalog of AI models with rich metadata including:
 - Context window limits (critical for GPU selection)
@@ -27,19 +29,18 @@ models.dev provides a comprehensive, provider-agnostic catalog of AI models with
 - Limited metadata (model name only from API)
 - Manual spec maintenance for new models
 
-### Proposed (models.dev-enhanced):
+### Implemented (models.dev-enhanced):
 
 ```
 ┌─ User requests model (config or CLI)
-├─ Check config overrides
-├─ Query models.dev API (cached, 10s TTL)
+├─ Check config overrides (highest priority)
+├─ Check hardcoded defaults (for common Ollama models)
+├─ Query models.dev API (cached, 5-min TTL)
 │  ├─ Get context window from "limit.context"
-│  ├─ Get model capabilities (reasoning, tool_call)
-│  ├─ Get benchmarks and release info
-│  └─ Cache response locally
-├─ Fall back to Ollama API if available
-├─ Fall back to hardcoded defaults
-└─ Estimate VRAM (formula based on parameters)
+│  ├─ Extract parameter count from model name (70b, 7b, etc.)
+│  ├─ Estimate VRAM using formula (params × dtype + KV cache + working space)
+│  └─ Cache response locally (TTL-based validity)
+└─ Return error if model not found
 ```
 
 ## Data Structure from models.dev
@@ -63,35 +64,58 @@ models.dev provides a comprehensive, provider-agnostic catalog of AI models with
 }
 ```
 
-## Implementation Strategy
+## Implementation Details
 
-### Phase 1: Research (Current)
-- ✅ Identified models.dev API endpoints
-- ✅ Analyzed data structure and available fields
-- ✅ Confirmed rich model metadata available
+### What Was Implemented
 
-### Phase 2: Integration (Optional)
-Would add to `internal/models/`:
-- `modelsdev.go` — HTTP client + caching (5-10 min TTL)
-- Model lookup: `GetModelSpecsFromModelsDev(name string)`
-- Priority chain: config overrides → models.dev → Ollama → hardcoded defaults
+**Files Created:**
+- `internal/models/modelsdev.go` — ModelsDevClient with HTTP and caching
+- `internal/models/modelsdev_test.go` — Comprehensive test suite
 
-### Phase 3: VRAM Estimation
-Models.dev doesn't provide model size (parameters) directly, but we could:
-1. Extract from model name patterns (e.g., "70b" → 70 billion parameters)
-2. Use benchmarks as a proxy
-3. Maintain a parameter size mapping table
+**Core Components:**
 
-**VRAM Formula:**
+1. **ModelsDevClient** — HTTP client with built-in caching
+   - `FetchAllModels()` — fetches entire catalog from https://models.dev/models.json
+   - `GetModel(modelID)` — retrieves single model (with cache-first strategy)
+   - Configurable `baseURL` for testing with mock servers
+   - Thread-safe operations via `sync.RWMutex`
+
+2. **ModelsDevCache** — TTL-based cache with automatic expiration
+   - Configurable TTL (default: 5 minutes in production)
+   - Checks validity before returning cached data
+   - Thread-safe reads and writes
+
+3. **EstimateVRAM()** — VRAM estimation from model specs
+   - Extracts parameter count from model name (patterns: 70b, 7b, 405b, etc.)
+   - Formula: `params × 2 bytes (bfloat16) + KV cache overhead + 15GB working space`
+   - Bounds: min 20GB, max 300GB
+   - Fallback: assumes 13B if parameters can't be extracted
+
+4. **Integration in GetModelSpec()** — Fallback chain
+   - Priority 1: Config overrides
+   - Priority 2: Hardcoded defaults (for Ollama models)
+   - Priority 3: models.dev API (with caching)
+   - Returns ModelSpec with estimated VRAM and context window
+
+**VRAM Estimation Details:**
+
+We extract parameter count from model name patterns (e.g., "70b" → 70 billion parameters):
+```go
+// Extraction patterns supported: 405b, 200b, 120b, 70b, 34b, 27b, 13b, 7b, 3.5b, 3b, 2b, 1b
+paramCount := extractParameterCount(modelID)
+
+// Estimation formula:
+// model_weights = paramCount × 2 bytes (for bfloat16)
+// kv_cache = context_size × param_count / 1000000 (rough heuristic)
+// working_space = 15 GB
+// total = max(20GB, min(300GB, model_weights + kv_cache + working_space))
 ```
-VRAM ≈ (parameters × dtype_bytes) + KV_cache_overhead + working_space
 
-Example (Llama 3.1 70B, bfloat16):
-- Weights: 70B × 2 bytes = 140 GB
-- KV cache (131K context): ~70 GB  
-- Working space: ~10 GB
-- Total: ~220 GB (fits on H100 80GB with quantization)
-```
+**Example (Llama 3.1 70B, bfloat16, 131K context):**
+- Model weights: 70 × 2 = 140 GB
+- KV cache overhead: 131072 × 70 / 1000000 ≈ 9.2 GB
+- Working space: 15 GB
+- **Total: ~164 GB** (fits on H100 80GB with quantization)
 
 ## Benefits
 
@@ -110,29 +134,39 @@ Example (Llama 3.1 70B, bfloat16):
 | VRAM estimation | Data-driven | Still requires formula tuning |
 | Offline operation | Works without network | Falls back to cached data |
 
-## Example Integration
+## Usage in Code
+
+The integration is transparent to callers — `GetModelSpec()` now automatically falls back to models.dev:
 
 ```go
-// Future API
-spec, err := models.GetModelSpecsEnhanced(ctx, "meta-llama/llama-3.1-70b", cfg)
-// Returns context: 131072, estimated VRAM: 220GB (with fallback to hardcoded)
+import "github.com/romanvolkov/runpod-launcher/internal/models"
 
-// GPU filtering now knows exact context requirements
+// This will try: overrides → hardcoded defaults → models.dev API
+spec, err := models.GetModelSpec("meta-llama/llama-3.1-70b", overrides)
+if err != nil {
+    log.Fatal(err)  // Model not found in any source
+}
+
+fmt.Printf("Model: %s\n", spec.Name)
+fmt.Printf("Min VRAM: %d GB\n", spec.MinVramGb)
+fmt.Printf("Context: %d tokens\n", spec.ContextWindow)
+
+// GPU filtering works with real context requirements
+gpu := models.GPUInfo{Name: "NVIDIA H100", MemoryGb: 80}
 suitability := models.CalculateSuitability(gpu, spec)
-// Green if VRAM ≥ estimated + 10GB headroom AND context supported
+if suitability.Level == "green" {
+    fmt.Println("GPU is suitable for this model")
+}
 ```
 
-## Recommendation
+## Configuration
 
-**For now:** Keep Ollama-based approach (proven, working)
-**Future:** Add models.dev as optional enhancement layer via flag or config setting
+Currently, models.dev integration is automatic with no configuration needed. The cache TTL is hardcoded to 5 minutes.
 
-```toml
-# config.toml (future)
-[model_specs]
-primary_source = "ollama"  # or "models-dev" or "hybrid"
-models_dev_cache_ttl = 300  # 5 minutes
-```
+**Future enhancements (if needed):**
+- Add `models_dev_cache_ttl` config option
+- Add flag to disable models.dev queries
+- Add environment variable override for base URL
 
 ## References
 

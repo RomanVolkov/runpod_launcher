@@ -125,7 +125,16 @@ $ runpod-launcher up
 model_name = "qwen3.6:27b"  # or "gemma:4", "mistral:latest", "llama3:70b"
 ```
 
-**Supported Models (with automatic VRAM requirements):**
+**Model Specs Resolution Chain:**
+
+When you specify a model, specs are resolved in this order:
+1. **Config overrides** — Custom specs in `[model_specs_override]`
+2. **Hardcoded defaults** — Common Ollama models (qwen, gemma, mistral, llama)
+3. **models.dev API** — 100K+ models with real metadata (cached 5 minutes)
+
+This means you can use any model from [models.dev](https://models.dev) catalog!
+
+**Builtin Models (with automatic VRAM requirements):**
 - `qwen3.6:27b` — 70GB VRAM, 128K context
 - `qwen3.5:27b` — 55GB VRAM, 32K context  
 - `gemma:4` — 40GB VRAM, 256K context
@@ -133,15 +142,20 @@ model_name = "qwen3.6:27b"  # or "gemma:4", "mistral:latest", "llama3:70b"
 - `mistral:latest` — 20GB VRAM, 32K context
 - `llama3:70b` — 75GB VRAM, 8K context
 
+**Models from models.dev (examples, any model ID works):**
+- `meta-llama/llama-3.1-70b` — Auto-fetched from models.dev
+- `mistral-ai/Mistral-7B-Instruct-v0.3` — Auto-fetched from models.dev
+- `allenai/OLMo-7B-hf` — Auto-fetched from models.dev
+
 **Custom Model Specifications:**
 
-Add custom model specs to your config to override defaults:
+Override specs for any model (including those from models.dev):
 
 ```toml
-[model_specs_override.custom_model]
+[model_specs_override.meta-llama/llama-3.1-70b]
 min_vram_gb = 60
 context_window = 32768
-description = "My custom model"
+description = "Tuned settings for my GPU"
 ```
 
 ### GPU Suitability Scoring
